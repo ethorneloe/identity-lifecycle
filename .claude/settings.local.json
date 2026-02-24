@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \". ''./IdentityLifecycle/tests/Invoke-SweepTest.ps1''\")",
+      "Bash(powershell -NoProfile -Command:*)",
+      "Bash(powershell.exe -NonInteractive -File run-monthly-tests.ps1)"
+    ]
+  }
+}

@@ -1,0 +1,1272 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Identity Lifecycle Direct Sweep - Test Report</title>
+<style>
+  body  { font-family: Segoe UI, Arial, sans-serif; font-size: 13px; margin: 24px; color: #333; background: #fafafa; }
+  h1    { font-size: 20px; margin-bottom: 4px; }
+  .meta { color: #666; font-size: 12px; margin-bottom: 18px; }
+  .summary { display: inline-block; background: #fff; border: 1px solid #ddd; border-radius: 4px; padding: 12px 20px; margin-bottom: 20px; }
+  .summary span { margin-right: 20px; font-size: 14px; }
+  .pass-count { color: #3c763d; font-weight: bold; }
+  .fail-count { color: #a94442; font-weight: bold; }
+  table { border-collapse: collapse; width: 100%; background: #fff; border: 1px solid #ddd; border-radius: 4px; }
+  th    { background: #3a3a3a; color: #fff; padding: 9px 12px; text-align: left; font-size: 12px; }
+  td    { padding: 7px 12px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 12px; }
+  tr.pass td { background-color: #f0fff0; }
+  tr.fail td { background-color: #fff0f0; }
+  .badge-pass { color: #3c763d; font-weight: bold; }
+  .badge-fail { color: #a94442; font-weight: bold; }
+  .detail     { color: #888; font-style: italic; }
+</style>
+</head>
+<body>
+<h1>Identity Lifecycle Direct Sweep - Test Report</h1>
+<div class="meta">Generated: 2026-02-21 13:31:18 UTC | Duration: 0.6s</div>
+<div class="summary">
+  <span>Total: <strong>154</strong></span>
+  <span class="pass-count">Pass: 154</span>
+  <span class="fail-count">Fail: 0</span>
+</div>
+<table>
+<thead><tr>
+  <th>Scenario</th><th>Run</th><th>Assertion</th><th>Expected</th><th>Actual</th><th>Result</th>
+</tr></thead>
+<tbody>
+<tr class="pass">
+  <td>01-01: AD account 30 days inactive -- below threshold -- Skipped/ActivityDetected</td>
+  <td>1</td>
+  <td>Skipped = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-01: AD account 30 days inactive -- below threshold -- Skipped/ActivityDetected</td>
+  <td>1</td>
+  <td>Warned = 0</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-01: AD account 30 days inactive -- below threshold -- Skipped/ActivityDetected</td>
+  <td>1</td>
+  <td>Disabled = 0</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-01: AD account 30 days inactive -- below threshold -- Skipped/ActivityDetected</td>
+  <td>1</td>
+  <td>Errors = 0</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-01: AD account 30 days inactive -- below threshold -- Skipped/ActivityDetected</td>
+  <td>1</td>
+  <td>Status = Skipped</td>
+  <td>Skipped</td>
+  <td>Skipped</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-01: AD account 30 days inactive -- below threshold -- Skipped/ActivityDetected</td>
+  <td>1</td>
+  <td>SkipReason = ActivityDetected</td>
+  <td>ActivityDetected</td>
+  <td>ActivityDetected</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-01: AD account 30 days inactive -- below threshold -- Skipped/ActivityDetected</td>
+  <td>1</td>
+  <td>No Notify fired</td>
+  <td>not fired</td>
+  <td>not fired</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-01: AD account 30 days inactive -- below threshold -- Skipped/ActivityDetected</td>
+  <td>1</td>
+  <td>No Disable fired</td>
+  <td>not fired</td>
+  <td>not fired</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-02: AD account already disabled at threshold -- Completed, Disable not called</td>
+  <td>1</td>
+  <td>Disabled = 1 (already disabled counts as completed)</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-02: AD account already disabled at threshold -- Completed, Disable not called</td>
+  <td>1</td>
+  <td>Status = Completed</td>
+  <td>Completed</td>
+  <td>Completed</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-02: AD account already disabled at threshold -- Completed, Disable not called</td>
+  <td>1</td>
+  <td>ActionTaken = Disable</td>
+  <td>Disable</td>
+  <td>Disable</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-02: AD account already disabled at threshold -- Completed, Disable not called</td>
+  <td>1</td>
+  <td>Notify still fired</td>
+  <td>Notify on adm.disabled02@corp.local</td>
+  <td>Notify on adm.disabled02@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-02: AD account already disabled at threshold -- Completed, Disable not called</td>
+  <td>1</td>
+  <td>Disable-InactiveAccount NOT called (already disabled)</td>
+  <td>not fired</td>
+  <td>not fired</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-03: Get-PrefixedADAccounts fails -- fatal error, Results empty, Summary present</td>
+  <td>1</td>
+  <td>Success = false</td>
+  <td>$false</td>
+  <td>False</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-03: Get-PrefixedADAccounts fails -- fatal error, Results empty, Summary present</td>
+  <td>1</td>
+  <td>Error is set</td>
+  <td>non-null</td>
+  <td>Mock: Get-PrefixedADAccounts forced failure</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-03: Get-PrefixedADAccounts fails -- fatal error, Results empty, Summary present</td>
+  <td>1</td>
+  <td>Results is empty</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-03: Get-PrefixedADAccounts fails -- fatal error, Results empty, Summary present</td>
+  <td>1</td>
+  <td>Summary is present (always built in finally)</td>
+  <td>non-null</td>
+  <td>@{Total=0; Warned=0; Disabled=0; Deleted=0; Skipped=0; Errors=0; NoOwner=0}</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-03: Get-PrefixedADAccounts fails -- fatal error, Results empty, Summary present</td>
+  <td>1</td>
+  <td>Total = 0</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-04: No accounts discovered -- zero results, Success=$true</td>
+  <td>1</td>
+  <td>Success = true</td>
+  <td>$true</td>
+  <td>True</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-04: No accounts discovered -- zero results, Success=$true</td>
+  <td>1</td>
+  <td>Error is null</td>
+  <td>$null</td>
+  <td></td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-04: No accounts discovered -- zero results, Success=$true</td>
+  <td>1</td>
+  <td>Summary present</td>
+  <td>non-null</td>
+  <td>@{Total=0; Warned=0; Disabled=0; Deleted=0; Skipped=0; Errors=0; NoOwner=0}</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-04: No accounts discovered -- zero results, Success=$true</td>
+  <td>1</td>
+  <td>Total = 0</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-05: AD account already disabled at DeleteThreshold, EnableDeletion ON -- Deleted</td>
+  <td>1</td>
+  <td>Deleted = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-05: AD account already disabled at DeleteThreshold, EnableDeletion ON -- Deleted</td>
+  <td>1</td>
+  <td>Status = Completed</td>
+  <td>Completed</td>
+  <td>Completed</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-05: AD account already disabled at DeleteThreshold, EnableDeletion ON -- Deleted</td>
+  <td>1</td>
+  <td>ActionTaken = Delete</td>
+  <td>Delete</td>
+  <td>Delete</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-05: AD account already disabled at DeleteThreshold, EnableDeletion ON -- Deleted</td>
+  <td>1</td>
+  <td>Remove fired</td>
+  <td>Remove on adm.del05@corp.local</td>
+  <td>Remove on adm.del05@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-05: AD account already disabled at DeleteThreshold, EnableDeletion ON -- Deleted</td>
+  <td>1</td>
+  <td>Disable-InactiveAccount not called (already disabled)</td>
+  <td>not fired</td>
+  <td>not fired</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-06: Mixed AD + Entra-native batch -- both accounts processed</td>
+  <td>1</td>
+  <td>Total = 2</td>
+  <td>2</td>
+  <td>2</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-06: Mixed AD + Entra-native batch -- both accounts processed</td>
+  <td>1</td>
+  <td>Warned = 1 (AD account with owner)</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-06: Mixed AD + Entra-native batch -- both accounts processed</td>
+  <td>1</td>
+  <td>Skipped = 1 (Entra-native, no owner)</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-06: Mixed AD + Entra-native batch -- both accounts processed</td>
+  <td>1</td>
+  <td>AD account completed</td>
+  <td>Completed</td>
+  <td>Completed</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>01-06: Mixed AD + Entra-native batch -- both accounts processed</td>
+  <td>1</td>
+  <td>Entra-native skipped (no owner)</td>
+  <td>Skipped</td>
+  <td>Skipped</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-01: 90 days inactive (exactly at WarnThreshold) -- Notify/Warning</td>
+  <td>1</td>
+  <td>Warned = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-01: 90 days inactive (exactly at WarnThreshold) -- Notify/Warning</td>
+  <td>1</td>
+  <td>Disabled = 0</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-01: 90 days inactive (exactly at WarnThreshold) -- Notify/Warning</td>
+  <td>1</td>
+  <td>Status = Completed</td>
+  <td>Completed</td>
+  <td>Completed</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-01: 90 days inactive (exactly at WarnThreshold) -- Notify/Warning</td>
+  <td>1</td>
+  <td>ActionTaken = Notify</td>
+  <td>Notify</td>
+  <td>Notify</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-01: 90 days inactive (exactly at WarnThreshold) -- Notify/Warning</td>
+  <td>1</td>
+  <td>NotificationStage = Warning</td>
+  <td>Warning</td>
+  <td>Warning</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-01: 90 days inactive (exactly at WarnThreshold) -- Notify/Warning</td>
+  <td>1</td>
+  <td>Notify fired</td>
+  <td>Notify on adm.warn01@corp.local</td>
+  <td>Notify on adm.warn01@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-01: 90 days inactive (exactly at WarnThreshold) -- Notify/Warning</td>
+  <td>1</td>
+  <td>Disable not fired</td>
+  <td>not fired</td>
+  <td>not fired</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-02: 89 days inactive (below WarnThreshold) -- Skipped/ActivityDetected</td>
+  <td>1</td>
+  <td>Skipped = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-02: 89 days inactive (below WarnThreshold) -- Skipped/ActivityDetected</td>
+  <td>1</td>
+  <td>Warned = 0</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-02: 89 days inactive (below WarnThreshold) -- Skipped/ActivityDetected</td>
+  <td>1</td>
+  <td>Status = Skipped</td>
+  <td>Skipped</td>
+  <td>Skipped</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-02: 89 days inactive (below WarnThreshold) -- Skipped/ActivityDetected</td>
+  <td>1</td>
+  <td>SkipReason = ActivityDetected</td>
+  <td>ActivityDetected</td>
+  <td>ActivityDetected</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-03: 120 days inactive (at DisableThreshold) -- Disable/Disabled</td>
+  <td>1</td>
+  <td>Disabled = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-03: 120 days inactive (at DisableThreshold) -- Disable/Disabled</td>
+  <td>1</td>
+  <td>Warned = 0</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-03: 120 days inactive (at DisableThreshold) -- Disable/Disabled</td>
+  <td>1</td>
+  <td>Status = Completed</td>
+  <td>Completed</td>
+  <td>Completed</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-03: 120 days inactive (at DisableThreshold) -- Disable/Disabled</td>
+  <td>1</td>
+  <td>ActionTaken = Disable</td>
+  <td>Disable</td>
+  <td>Disable</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-03: 120 days inactive (at DisableThreshold) -- Disable/Disabled</td>
+  <td>1</td>
+  <td>NotificationStage = Disabled</td>
+  <td>Disabled</td>
+  <td>Disabled</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-03: 120 days inactive (at DisableThreshold) -- Disable/Disabled</td>
+  <td>1</td>
+  <td>Notify fired</td>
+  <td>Notify on adm.disable03@corp.local</td>
+  <td>Notify on adm.disable03@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-03: 120 days inactive (at DisableThreshold) -- Disable/Disabled</td>
+  <td>1</td>
+  <td>Disable fired</td>
+  <td>Disable on adm.disable03@corp.local</td>
+  <td>Disable on adm.disable03@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-04: 150 days inactive (between thresholds) -- Disable/Disabled stage</td>
+  <td>1</td>
+  <td>Disabled = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-04: 150 days inactive (between thresholds) -- Disable/Disabled stage</td>
+  <td>1</td>
+  <td>ActionTaken = Disable</td>
+  <td>Disable</td>
+  <td>Disable</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-04: 150 days inactive (between thresholds) -- Disable/Disabled stage</td>
+  <td>1</td>
+  <td>NotificationStage = Disabled</td>
+  <td>Disabled</td>
+  <td>Disabled</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-04: 150 days inactive (between thresholds) -- Disable/Disabled stage</td>
+  <td>1</td>
+  <td>Status = Completed</td>
+  <td>Completed</td>
+  <td>Completed</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-05: 180 days inactive, EnableDeletion OFF -- Disable with Deletion notification</td>
+  <td>1</td>
+  <td>Disabled = 1 (EnableDeletion off)</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-05: 180 days inactive, EnableDeletion OFF -- Disable with Deletion notification</td>
+  <td>1</td>
+  <td>Deleted = 0</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-05: 180 days inactive, EnableDeletion OFF -- Disable with Deletion notification</td>
+  <td>1</td>
+  <td>ActionTaken = Disable</td>
+  <td>Disable</td>
+  <td>Disable</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-05: 180 days inactive, EnableDeletion OFF -- Disable with Deletion notification</td>
+  <td>1</td>
+  <td>NotificationStage = Deletion</td>
+  <td>Deletion</td>
+  <td>Deletion</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-05: 180 days inactive, EnableDeletion OFF -- Disable with Deletion notification</td>
+  <td>1</td>
+  <td>Status = Completed</td>
+  <td>Completed</td>
+  <td>Completed</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-05: 180 days inactive, EnableDeletion OFF -- Disable with Deletion notification</td>
+  <td>1</td>
+  <td>Notify fired</td>
+  <td>Notify on adm.del05a@corp.local</td>
+  <td>Notify on adm.del05a@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-05: 180 days inactive, EnableDeletion OFF -- Disable with Deletion notification</td>
+  <td>1</td>
+  <td>Disable fired</td>
+  <td>Disable on adm.del05a@corp.local</td>
+  <td>Disable on adm.del05a@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-05: 180 days inactive, EnableDeletion OFF -- Disable with Deletion notification</td>
+  <td>1</td>
+  <td>Remove NOT fired</td>
+  <td>not fired</td>
+  <td>not fired</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-06: 180 days inactive, EnableDeletion ON -- Remove with Deletion notification</td>
+  <td>1</td>
+  <td>Deleted = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-06: 180 days inactive, EnableDeletion ON -- Remove with Deletion notification</td>
+  <td>1</td>
+  <td>Disabled = 0</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-06: 180 days inactive, EnableDeletion ON -- Remove with Deletion notification</td>
+  <td>1</td>
+  <td>ActionTaken = Delete</td>
+  <td>Delete</td>
+  <td>Delete</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-06: 180 days inactive, EnableDeletion ON -- Remove with Deletion notification</td>
+  <td>1</td>
+  <td>NotificationStage = Deletion</td>
+  <td>Deletion</td>
+  <td>Deletion</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-06: 180 days inactive, EnableDeletion ON -- Remove with Deletion notification</td>
+  <td>1</td>
+  <td>Status = Completed</td>
+  <td>Completed</td>
+  <td>Completed</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-06: 180 days inactive, EnableDeletion ON -- Remove with Deletion notification</td>
+  <td>1</td>
+  <td>Notify fired</td>
+  <td>Notify on adm.del06b@corp.local</td>
+  <td>Notify on adm.del06b@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-06: 180 days inactive, EnableDeletion ON -- Remove with Deletion notification</td>
+  <td>1</td>
+  <td>Remove fired</td>
+  <td>Remove on adm.del06b@corp.local</td>
+  <td>Remove on adm.del06b@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-06: 180 days inactive, EnableDeletion ON -- Remove with Deletion notification</td>
+  <td>1</td>
+  <td>Disable NOT fired</td>
+  <td>not fired</td>
+  <td>not fired</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-07: No LastLogonAD -- falls back to Created for InactiveDays</td>
+  <td>1</td>
+  <td>Warned = 1 (Created 95 days ago &gt;= WarnThreshold)</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-07: No LastLogonAD -- falls back to Created for InactiveDays</td>
+  <td>1</td>
+  <td>Status = Completed</td>
+  <td>Completed</td>
+  <td>Completed</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-07: No LastLogonAD -- falls back to Created for InactiveDays</td>
+  <td>1</td>
+  <td>ActionTaken = Notify</td>
+  <td>Notify</td>
+  <td>Notify</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-08: No activity data whatsoever -- Error (cannot determine last activity)</td>
+  <td>1</td>
+  <td>Errors = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-08: No activity data whatsoever -- Error (cannot determine last activity)</td>
+  <td>1</td>
+  <td>Status = Error</td>
+  <td>Error</td>
+  <td>Error</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-09: Custom thresholds -- WarnThreshold=30, account at 35 days -- Warn</td>
+  <td>1</td>
+  <td>Warned = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>02-09: Custom thresholds -- WarnThreshold=30, account at 35 days -- Warn</td>
+  <td>1</td>
+  <td>ActionTaken = Notify</td>
+  <td>Notify</td>
+  <td>Notify</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-01: Owner resolved via prefix-strip (primary strategy)</td>
+  <td>1</td>
+  <td>Warned = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-01: Owner resolved via prefix-strip (primary strategy)</td>
+  <td>1</td>
+  <td>Status = Completed</td>
+  <td>Completed</td>
+  <td>Completed</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-01: Owner resolved via prefix-strip (primary strategy)</td>
+  <td>1</td>
+  <td>Recipient = prefix-strip owner</td>
+  <td>prefown01@corp.local</td>
+  <td>prefown01@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-01: Owner resolved via prefix-strip (primary strategy)</td>
+  <td>1</td>
+  <td>Notify fired</td>
+  <td>Notify on adm.prefown01@corp.local</td>
+  <td>Notify on adm.prefown01@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-02: No prefix match -- owner resolved via extensionAttribute14 fallback</td>
+  <td>1</td>
+  <td>Warned = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-02: No prefix match -- owner resolved via extensionAttribute14 fallback</td>
+  <td>1</td>
+  <td>Status = Completed</td>
+  <td>Completed</td>
+  <td>Completed</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-02: No prefix match -- owner resolved via extensionAttribute14 fallback</td>
+  <td>1</td>
+  <td>Recipient = EA14 owner</td>
+  <td>infra02owner@corp.local</td>
+  <td>infra02owner@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-03: EA14 owner SAM not in AD -- prefix-strip fallback succeeds</td>
+  <td>1</td>
+  <td>Warned = 1 (fallback to prefix-strip)</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-03: EA14 owner SAM not in AD -- prefix-strip fallback succeeds</td>
+  <td>1</td>
+  <td>Status = Completed</td>
+  <td>Completed</td>
+  <td>Completed</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-03: EA14 owner SAM not in AD -- prefix-strip fallback succeeds</td>
+  <td>1</td>
+  <td>Recipient = prefix-strip owner</td>
+  <td>ea14bad03@corp.local</td>
+  <td>ea14bad03@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-04: No owner resolvable -- Skipped/NoOwnerFound</td>
+  <td>1</td>
+  <td>Skipped = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-04: No owner resolvable -- Skipped/NoOwnerFound</td>
+  <td>1</td>
+  <td>NoOwner = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-04: No owner resolvable -- Skipped/NoOwnerFound</td>
+  <td>1</td>
+  <td>Status = Skipped</td>
+  <td>Skipped</td>
+  <td>Skipped</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-04: No owner resolvable -- Skipped/NoOwnerFound</td>
+  <td>1</td>
+  <td>SkipReason = NoOwnerFound</td>
+  <td>NoOwnerFound</td>
+  <td>NoOwnerFound</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-04: No owner resolvable -- Skipped/NoOwnerFound</td>
+  <td>1</td>
+  <td>No Notify fired</td>
+  <td>not fired</td>
+  <td>not fired</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-04: No owner resolvable -- Skipped/NoOwnerFound</td>
+  <td>1</td>
+  <td>No Disable fired</td>
+  <td>not fired</td>
+  <td>not fired</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-05: Prefix-strip takes priority over EA14 when both resolve</td>
+  <td>1</td>
+  <td>Warned = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>03-05: Prefix-strip takes priority over EA14 when both resolve</td>
+  <td>1</td>
+  <td>Recipient = prefix-strip (not EA14)</td>
+  <td>ea14pri05@corp.local</td>
+  <td>ea14pri05@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-01: Notify fails -- fatal error, Disable not fired</td>
+  <td>1</td>
+  <td>Success = false on notify failure</td>
+  <td>$false</td>
+  <td>False</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-01: Notify fails -- fatal error, Disable not fired</td>
+  <td>1</td>
+  <td>Error mentions Send-GraphMail</td>
+  <td>$true</td>
+  <td>True</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-01: Notify fails -- fatal error, Disable not fired</td>
+  <td>1</td>
+  <td>Disable NOT fired (loop aborted)</td>
+  <td>not fired</td>
+  <td>not fired</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-02: Notify fails mid-batch -- loop aborts, upn1 already actioned</td>
+  <td>1</td>
+  <td>Success = false on notify failure</td>
+  <td>$false</td>
+  <td>False</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-02: Notify fails mid-batch -- loop aborts, upn1 already actioned</td>
+  <td>1</td>
+  <td>Error mentions Send-GraphMail</td>
+  <td>$true</td>
+  <td>True</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-02: Notify fails mid-batch -- loop aborts, upn1 already actioned</td>
+  <td>1</td>
+  <td>Disable fired for upn1 before failure</td>
+  <td>Disable on adm.ok02a@corp.local</td>
+  <td>Disable on adm.ok02a@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-02: Notify fails mid-batch -- loop aborts, upn1 already actioned</td>
+  <td>1</td>
+  <td>Disable NOT fired for upn2 (loop aborted)</td>
+  <td>not fired</td>
+  <td>not fired</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-03: Disable-InactiveAccount fails -- Error recorded</td>
+  <td>1</td>
+  <td>Errors = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-03: Disable-InactiveAccount fails -- Error recorded</td>
+  <td>1</td>
+  <td>Disabled = 0 (not completed)</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-03: Disable-InactiveAccount fails -- Error recorded</td>
+  <td>1</td>
+  <td>Status = Error</td>
+  <td>Error</td>
+  <td>Error</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-03: Disable-InactiveAccount fails -- Error recorded</td>
+  <td>1</td>
+  <td>Error field is set</td>
+  <td>non-null</td>
+  <td>Mock: forced disable failure</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-03: Disable-InactiveAccount fails -- Error recorded</td>
+  <td>1</td>
+  <td>Notify still fired</td>
+  <td>Notify on adm.disfail03@corp.local</td>
+  <td>Notify on adm.disfail03@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-03: Disable-InactiveAccount fails -- Error recorded</td>
+  <td>1</td>
+  <td>Disable was attempted</td>
+  <td>Disable on adm.disfail03@corp.local</td>
+  <td>Disable on adm.disfail03@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-04: Remove-InactiveAccount fails -- Error recorded</td>
+  <td>1</td>
+  <td>Deleted = 0 (failure)</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-04: Remove-InactiveAccount fails -- Error recorded</td>
+  <td>1</td>
+  <td>Errors = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-04: Remove-InactiveAccount fails -- Error recorded</td>
+  <td>1</td>
+  <td>Status = Error</td>
+  <td>Error</td>
+  <td>Error</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-04: Remove-InactiveAccount fails -- Error recorded</td>
+  <td>1</td>
+  <td>Remove was attempted</td>
+  <td>Remove on adm.remfail04@corp.local</td>
+  <td>Remove on adm.remfail04@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-05: Mixed batch -- one success, one disable failure -- both counted</td>
+  <td>1</td>
+  <td>Total = 2</td>
+  <td>2</td>
+  <td>2</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-05: Mixed batch -- one success, one disable failure -- both counted</td>
+  <td>1</td>
+  <td>Disabled = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-05: Mixed batch -- one success, one disable failure -- both counted</td>
+  <td>1</td>
+  <td>Errors = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-05: Mixed batch -- one success, one disable failure -- both counted</td>
+  <td>1</td>
+  <td>upn1 Status = Completed</td>
+  <td>Completed</td>
+  <td>Completed</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-05: Mixed batch -- one success, one disable failure -- both counted</td>
+  <td>1</td>
+  <td>upn2 Status = Error</td>
+  <td>Error</td>
+  <td>Error</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-06: Connect-MgGraph fails -- fatal error, Results empty</td>
+  <td>1</td>
+  <td>Success = false on connect failure</td>
+  <td>$false</td>
+  <td>False</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-06: Connect-MgGraph fails -- fatal error, Results empty</td>
+  <td>1</td>
+  <td>Error is set</td>
+  <td>non-null</td>
+  <td>Mock: Connect-MgGraph forced failure</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-06: Connect-MgGraph fails -- fatal error, Results empty</td>
+  <td>1</td>
+  <td>Error mentions Connect-MgGraph</td>
+  <td>$true</td>
+  <td>True</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-06: Connect-MgGraph fails -- fatal error, Results empty</td>
+  <td>1</td>
+  <td>Summary is present (always built in finally)</td>
+  <td>non-null</td>
+  <td>@{Total=0; Warned=0; Disabled=0; Deleted=0; Skipped=0; Errors=0; NoOwner=0}</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-06: Connect-MgGraph fails -- fatal error, Results empty</td>
+  <td>1</td>
+  <td>Total = 0 (never processed)</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-06: Connect-MgGraph fails -- fatal error, Results empty</td>
+  <td>1</td>
+  <td>Results is empty (never processed)</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>04-06: Connect-MgGraph fails -- fatal error, Results empty</td>
+  <td>1</td>
+  <td>No actions fired</td>
+  <td>not fired</td>
+  <td>not fired</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>05-01: Return object has Summary, Results, Success, Error fields</td>
+  <td>1</td>
+  <td>Return value is non-null</td>
+  <td>non-null</td>
+  <td>@{Summary=; Results=System.Management.Automation.PSObject[]; Success=True; Error=}</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>05-01: Return object has Summary, Results, Success, Error fields</td>
+  <td>1</td>
+  <td>Summary field present</td>
+  <td>non-null</td>
+  <td>@{Total=1; Warned=1; Disabled=0; Deleted=0; Skipped=0; Errors=0; NoOwner=0}</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>05-01: Return object has Summary, Results, Success, Error fields</td>
+  <td>1</td>
+  <td>Results field present</td>
+  <td>non-null</td>
+  <td>@{UPN=adm.retobj01@corp.local; SamAccountName=adm.retobj01; InactiveDays=95; ActionTaken=Notify; NotificationStage=Warning; NotificationSent=True; NotificationRecipient=retobj01@corp.local; Status=Completed; SkipReason=; Error=; Timestamp=2026-02-21T13:31:19.3753158Z}</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>05-01: Return object has Summary, Results, Success, Error fields</td>
+  <td>1</td>
+  <td>Success property exists</td>
+  <td>$true</td>
+  <td>True</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>05-01: Return object has Summary, Results, Success, Error fields</td>
+  <td>1</td>
+  <td>Error property exists</td>
+  <td>$true</td>
+  <td>True</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>05-02: Failed accounts recorded in Results with Status=Error</td>
+  <td>1</td>
+  <td>One error entry in Results</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>05-02: Failed accounts recorded in Results with Status=Error</td>
+  <td>1</td>
+  <td>Error entry UPN = upn2</td>
+  <td>adm.fail02b@corp.local</td>
+  <td>adm.fail02b@corp.local</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>05-02: Failed accounts recorded in Results with Status=Error</td>
+  <td>1</td>
+  <td>Summary.Errors = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>05-03: Summary fields correct for mixed batch (warn, disable, skip)</td>
+  <td>1</td>
+  <td>Total = 3</td>
+  <td>3</td>
+  <td>3</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>05-03: Summary fields correct for mixed batch (warn, disable, skip)</td>
+  <td>1</td>
+  <td>Warned = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>05-03: Summary fields correct for mixed batch (warn, disable, skip)</td>
+  <td>1</td>
+  <td>Disabled = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>05-03: Summary fields correct for mixed batch (warn, disable, skip)</td>
+  <td>1</td>
+  <td>Skipped = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>05-03: Summary fields correct for mixed batch (warn, disable, skip)</td>
+  <td>1</td>
+  <td>Errors = 0</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>05-03: Summary fields correct for mixed batch (warn, disable, skip)</td>
+  <td>1</td>
+  <td>Deleted = 0</td>
+  <td>0</td>
+  <td>0</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-01: Entra-native with recent sign-in -- Skipped/ActivityDetected</td>
+  <td>1</td>
+  <td>Skipped = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-01: Entra-native with recent sign-in -- Skipped/ActivityDetected</td>
+  <td>1</td>
+  <td>SkipReason = ActivityDetected</td>
+  <td>ActivityDetected</td>
+  <td>ActivityDetected</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-02: Entra-native 95 days inactive -- Skipped/NoOwnerFound (no SAM)</td>
+  <td>1</td>
+  <td>Skipped = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-02: Entra-native 95 days inactive -- Skipped/NoOwnerFound (no SAM)</td>
+  <td>1</td>
+  <td>NoOwner = 1</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-02: Entra-native 95 days inactive -- Skipped/NoOwnerFound (no SAM)</td>
+  <td>1</td>
+  <td>SkipReason = NoOwnerFound</td>
+  <td>NoOwnerFound</td>
+  <td>NoOwnerFound</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-03: AD account with synced Entra -- Entra sign-in used when more recent</td>
+  <td>1</td>
+  <td>Skipped = 1 (Entra sign-in 85d &lt; WarnThreshold 90d)</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-03: AD account with synced Entra -- Entra sign-in used when more recent</td>
+  <td>1</td>
+  <td>SkipReason = ActivityDetected</td>
+  <td>ActivityDetected</td>
+  <td>ActivityDetected</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-04: AD account with synced Entra -- AD logon used when more recent</td>
+  <td>1</td>
+  <td>Skipped = 1 (AD logon 85d &lt; WarnThreshold 90d)</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-04: AD account with synced Entra -- AD logon used when more recent</td>
+  <td>1</td>
+  <td>SkipReason = ActivityDetected</td>
+  <td>ActivityDetected</td>
+  <td>ActivityDetected</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-05: Mixed batch -- AD with owner, AD no owner, Entra-native</td>
+  <td>1</td>
+  <td>Total = 3</td>
+  <td>3</td>
+  <td>3</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-05: Mixed batch -- AD with owner, AD no owner, Entra-native</td>
+  <td>1</td>
+  <td>Disabled = 1 (mix05a)</td>
+  <td>1</td>
+  <td>1</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-05: Mixed batch -- AD with owner, AD no owner, Entra-native</td>
+  <td>1</td>
+  <td>Skipped = 2 (mix05b NoOwner + cloud NoOwner)</td>
+  <td>2</td>
+  <td>2</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-05: Mixed batch -- AD with owner, AD no owner, Entra-native</td>
+  <td>1</td>
+  <td>NoOwner = 2</td>
+  <td>2</td>
+  <td>2</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-05: Mixed batch -- AD with owner, AD no owner, Entra-native</td>
+  <td>1</td>
+  <td>mix05a = Completed</td>
+  <td>Completed</td>
+  <td>Completed</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-05: Mixed batch -- AD with owner, AD no owner, Entra-native</td>
+  <td>1</td>
+  <td>mix05b = Skipped</td>
+  <td>Skipped</td>
+  <td>Skipped</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+<tr class="pass">
+  <td>06-05: Mixed batch -- AD with owner, AD no owner, Entra-native</td>
+  <td>1</td>
+  <td>cloud = Skipped</td>
+  <td>Skipped</td>
+  <td>Skipped</td>
+  <td><span class="badge-pass">PASS</span></td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>
