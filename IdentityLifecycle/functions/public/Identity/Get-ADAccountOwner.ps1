@@ -1,7 +1,7 @@
 function Get-ADAccountOwner {
     <#
     .SYNOPSIS
-        Resolves the owner of a privileged AD account.
+        Resolves the owner of a prefixed AD account.
 
     .DESCRIPTION
         Attempts to identify the owning standard account in two steps, in order:
@@ -12,9 +12,11 @@ function Get-ADAccountOwner {
                This is the primary strategy because the naming convention is the
                authoritative ownership contract.
 
-            2. extensionAttribute14 -- looks for an 'owner=<sam>' key=value pair in a
+            2. Extension attribute -- looks for an 'owner=<sam>' key=value pair in a
                semicolon-delimited string (e.g. 'dept=IT;owner=jsmith.mgr;location=HQ').
                The candidate SAM is verified to exist in AD before being returned.
+               extensionAttribute14 is used here as it tends to be available in most
+               environments; swap it for whichever extension attribute your org uses.
                Use this for accounts that do not follow the naming convention (shared
                accounts, exceptions, accounts owned by someone other than the name implies).
 
@@ -25,8 +27,10 @@ function Get-ADAccountOwner {
         Required for the prefix-strip strategy; may be empty for Entra-native accounts.
 
     .PARAMETER ExtAttr14
-        The value of extensionAttribute14 on the AD account, if present.
-        May be $null or empty -- the strategy is silently skipped in that case.
+        The value of an extension attribute on the AD account, if present. extensionAttribute14
+        is used in the orchestrators as it tends to be spare in most environments; swap it for
+        whichever attribute your org uses. May be $null or empty -- the strategy is silently
+        skipped in that case.
 
     .PARAMETER Prefixes
         SAMAccountName prefixes used to identify privileged accounts and derive the
@@ -81,7 +85,8 @@ function Get-ADAccountOwner {
     }
 
     # ------------------------------------------------------------------
-    # Strategy 2: extensionAttribute14  owner=<sam>  (exception override)
+    # Strategy 2: extension attribute  owner=<sam>  (exception override)
+    # extensionAttribute14 is used as it tends to be spare; swap for whichever your org uses.
     # Used for accounts that don't follow the naming convention.
     # ------------------------------------------------------------------
     if ($ExtAttr14) {

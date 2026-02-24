@@ -1,0 +1,6 @@
+# Generated test reports
+IdentityLifecycle/tests/**/reports/
+IdentityLifecycle/tests-monthly/reports/
+
+# PowerShell transcripts
+test-output.txt
