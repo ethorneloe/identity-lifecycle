@@ -57,9 +57,14 @@ function Invoke-AccountInactivityRemediationWithImport {
                swap it in Get-ADAccountOwner for whichever attribute your org uses.
                Only available for AD-routed accounts; Entra-native accounts have no
                extension attribute data.
-        If no owner is resolved, the account is skipped with Status='Skipped' and
-        SkipReason='NoOwnerFound'. No notification or action is taken. These accounts appear
-        in the output for a human to investigate and assign an owner before the next run.
+            3. Entra sponsor: when both AD strategies fail and the account has an
+               EntraObjectId, the Entra sponsor relationship is queried via
+               Get-MgUserSponsor. The first sponsor's Mail address (or UPN) is used as
+               the notification recipient. This is the only resolution path for
+               cloud-native accounts that have no AD owner.
+        If no strategy resolves a recipient, the account is skipped with Status='Skipped'
+        and SkipReason='NoOwnerFound'. No notification or action is taken. These accounts
+        appear in the output for a human to investigate before the next run.
 
         OUTPUT
         The function never throws. A consistent output object is always returned with
@@ -385,36 +390,70 @@ function Invoke-AccountInactivityRemediationWithImport {
 
             # ----------------------------------------------------------
             # OWNER RESOLUTION
-            # Prefix-strip is tried first (primary -- naming convention is
-            # authoritative). EA14 'owner=<sam>' is the fallback for accounts
-            # that don't follow the naming convention. If neither resolves,
-            # the account is skipped: notification belongs with an owner, and
-            # a human must assign one before the next run.
+            # Strategies are tried in order; the first that yields a
+            # notification recipient wins.
             #
-            # For Entra-native accounts, $sam is $null (no SamAccountName in
-            # the input row) so prefix-strip inside Get-ADAccountOwner is
-            # skipped and $liveExtAttr14 is also $null (no EA14 from Entra).
-            # These accounts will always fall through to NoOwnerFound.
+            # 1. Prefix strip (primary -- naming convention is authoritative):
+            #    strip the leading prefix and separator from SamAccountName
+            #    and verify the result exists in AD. Skipped when $sam is $null
+            #    (Entra-native accounts have no SamAccountName in the input row).
+            #
+            # 2. Extension attribute: parse 'owner=<sam>' from semicolon-delimited
+            #    key=value pairs in extensionAttribute14 (or whichever attribute
+            #    your org uses -- swap it in Get-ADAccountOwner). Only available
+            #    for AD-routed accounts.
+            #
+            # 3. Entra sponsor: when AD-based strategies both fail and the account
+            #    has an EntraObjectId, the Entra sponsor relationship is queried
+            #    via Get-MgUserSponsor. The first sponsor's Mail address is used
+            #    as the notification recipient (falling back to UserPrincipalName).
+            #    This is the only resolution path available for cloud-native
+            #    Entra accounts that have no AD owner.
+            #
+            # If no strategy resolves a recipient, the account is skipped:
+            # a human must assign an owner before the next run.
             # ----------------------------------------------------------
             $ownerResult = Get-ADAccountOwner -SamAccountName $sam -ExtAttr14 $liveExtAttr14
 
-            if (-not $ownerResult) {
+            $notifyRecipient = $null
+
+            if ($ownerResult) {
+                # AD-based owner resolved -- look up their email address
+                try {
+                    $ownerEmail = (Get-ADUser -Identity $ownerResult.SamAccountName `
+                            -Properties EmailAddress -ErrorAction Stop).EmailAddress
+                    if ($ownerEmail) { $notifyRecipient = $ownerEmail }
+                }
+                catch { Write-Verbose "Owner email lookup failed for '$($ownerResult.SamAccountName)': $_" }
+
+                if (-not $notifyRecipient) {
+                    $resultList.Add((New-ResultEntry -UPN $upn -SamAccountName $sam -InactiveDays $inactiveDays `
+                        -Status 'Skipped' -SkipReason 'NoEmailFound'))
+                    continue
+                }
+            }
+            elseif ($entraObjectId) {
+                # No AD owner -- try Entra sponsor as a last resort
+                try {
+                    $sponsors = @(Get-MgUserSponsor -UserId $entraObjectId -Property 'mail,userPrincipalName' -ErrorAction Stop)
+                    if ($sponsors.Count -gt 0) {
+                        $sponsor = $sponsors[0]
+                        $sponsorEmail = if ($sponsor.Mail) { $sponsor.Mail } else { $sponsor.UserPrincipalName }
+                        if ($sponsorEmail) { $notifyRecipient = $sponsorEmail }
+                    }
+                }
+                catch { Write-Verbose "Entra sponsor lookup failed for '$upn': $_" }
+
+                if (-not $notifyRecipient) {
+                    $resultList.Add((New-ResultEntry -UPN $upn -SamAccountName $sam -InactiveDays $inactiveDays `
+                        -Status 'Skipped' -SkipReason 'NoOwnerFound'))
+                    continue
+                }
+            }
+            else {
+                # No AD owner and no EntraObjectId to try sponsor lookup
                 $resultList.Add((New-ResultEntry -UPN $upn -SamAccountName $sam -InactiveDays $inactiveDays `
                     -Status 'Skipped' -SkipReason 'NoOwnerFound'))
-                continue
-            }
-
-            $notifyRecipient = $null
-            try {
-                $ownerEmail = (Get-ADUser -Identity $ownerResult.SamAccountName `
-                        -Properties EmailAddress -ErrorAction Stop).EmailAddress
-                if ($ownerEmail) { $notifyRecipient = $ownerEmail }
-            }
-            catch { Write-Verbose "Owner email lookup failed for '$($ownerResult.SamAccountName)': $_" }
-
-            if (-not $notifyRecipient) {
-                $resultList.Add((New-ResultEntry -UPN $upn -SamAccountName $sam -InactiveDays $inactiveDays `
-                    -Status 'Skipped' -SkipReason 'NoEmailFound'))
                 continue
             }
 

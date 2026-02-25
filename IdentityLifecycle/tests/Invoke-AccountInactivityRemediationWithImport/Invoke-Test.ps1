@@ -49,12 +49,13 @@ $script:CurrentScenario  = ''
 $script:CurrentRun       = 1
 
 $script:MockContext = @{
-    ADUsers     = @{}
-    MgUsers     = @{}
-    Actions     = [System.Collections.Generic.List[pscustomobject]]::new()
-    NotifyFail  = @()
-    DisableFail = @()
-    RemoveFail  = @()
+    ADUsers        = @{}
+    MgUsers        = @{}
+    MgUserSponsors = @{}
+    Actions        = [System.Collections.Generic.List[pscustomobject]]::new()
+    NotifyFail     = @()
+    DisableFail    = @()
+    RemoveFail     = @()
 }
 
 # ---------------------------------------------------------------------------
@@ -112,13 +113,14 @@ function Invoke-WithImportOnce {
 function Set-ScenarioContext {
     param($Scenario)
 
-    $script:MockContext.Actions     = [System.Collections.Generic.List[pscustomobject]]::new()
-    $script:MockContext.ADUsers     = if ($Scenario.ContainsKey('ADUsers'))     { $Scenario.ADUsers }     else { @{} }
-    $script:MockContext.MgUsers     = if ($Scenario.ContainsKey('MgUsers'))     { $Scenario.MgUsers }     else { @{} }
-    $script:MockContext.NotifyFail  = @(if ($Scenario.ContainsKey('NotifyFail'))  { $Scenario.NotifyFail }  else { @() })
-    $script:MockContext.DisableFail = @(if ($Scenario.ContainsKey('DisableFail')) { $Scenario.DisableFail } else { @() })
-    $script:MockContext.RemoveFail  = @(if ($Scenario.ContainsKey('RemoveFail'))  { $Scenario.RemoveFail }  else { @() })
-    $script:MockContext.ConnectFail = if ($Scenario.ContainsKey('ConnectFail'))  { $Scenario.ConnectFail }  else { $false }
+    $script:MockContext.Actions        = [System.Collections.Generic.List[pscustomobject]]::new()
+    $script:MockContext.ADUsers        = if ($Scenario.ContainsKey('ADUsers'))        { $Scenario.ADUsers }        else { @{} }
+    $script:MockContext.MgUsers        = if ($Scenario.ContainsKey('MgUsers'))        { $Scenario.MgUsers }        else { @{} }
+    $script:MockContext.MgUserSponsors = if ($Scenario.ContainsKey('MgUserSponsors')) { $Scenario.MgUserSponsors } else { @{} }
+    $script:MockContext.NotifyFail     = @(if ($Scenario.ContainsKey('NotifyFail'))   { $Scenario.NotifyFail }     else { @() })
+    $script:MockContext.DisableFail    = @(if ($Scenario.ContainsKey('DisableFail'))  { $Scenario.DisableFail }    else { @() })
+    $script:MockContext.RemoveFail     = @(if ($Scenario.ContainsKey('RemoveFail'))   { $Scenario.RemoveFail }     else { @() })
+    $script:MockContext.ConnectFail    = if ($Scenario.ContainsKey('ConnectFail'))    { $Scenario.ConnectFail }    else { $false }
 }
 
 function Invoke-Scenario {

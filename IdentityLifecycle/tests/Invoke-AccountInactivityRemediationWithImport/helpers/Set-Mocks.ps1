@@ -13,15 +13,18 @@ function Set-Mocks {
         keys between calls; no re-install needed.
 
         $MockContext keys:
-            ADUsers       - hashtable of SamAccountName (lower) -> fake ADUser object
-                            Used for ALL Get-ADUser calls (live check + owner + email)
-            MgUsers       - hashtable of EntraObjectId (lower) -> fake MgUser object
-            Actions       - List[pscustomobject] of captured action records
-                            { Action, UPN, Stage, Recipient }
-            NotifyFail    - string[] of UPNs for which Send-GraphMail throws
-            DisableFail   - string[] of UPNs for which Disable-InactiveAccount fails
-            RemoveFail    - string[] of UPNs for which Remove-InactiveAccount fails
-            ConnectFail   - $true to make Connect-MgGraph throw (tests fatal setup failure)
+            ADUsers         - hashtable of SamAccountName (lower) -> fake ADUser object
+                              Used for ALL Get-ADUser calls (live check + owner + email)
+            MgUsers         - hashtable of EntraObjectId (lower) -> fake MgUser object
+            MgUserSponsors  - hashtable of EntraObjectId (lower) -> pscustomobject[]
+                              Each sponsor object should have Mail and/or UserPrincipalName.
+                              $null or missing key = no sponsors (empty result).
+            Actions         - List[pscustomobject] of captured action records
+                              { Action, UPN, Stage, Recipient }
+            NotifyFail      - string[] of UPNs for which Send-GraphMail throws
+            DisableFail     - string[] of UPNs for which Disable-InactiveAccount fails
+            RemoveFail      - string[] of UPNs for which Remove-InactiveAccount fails
+            ConnectFail     - $true to make Connect-MgGraph throw (tests fatal setup failure)
 
         Functions that run for real (not mocked):
             Resolve-EntraSignIn   - sign-in max logic exercised
@@ -114,6 +117,24 @@ function Set-Mocks {
                 throw "Mock: Get-MgUser '$UserId' not found"
             }
             return $obj
+        }
+
+        # -------------------------------------------------------------------
+        # Get-MgUserSponsor mock
+        # Keyed by EntraObjectId (lowercased). Returns sponsor objects with
+        # Mail and/or UserPrincipalName. Returns empty array when key is absent.
+        # -------------------------------------------------------------------
+        function script:Get-MgUserSponsor {
+            param(
+                $UserId,
+                [string[]] $Property,
+                $ErrorAction
+            )
+            $ctx = $script:WithImportMockCtx
+            $key = $UserId.ToString().ToLower()
+            $sponsors = $ctx.MgUserSponsors[$key]
+            if ($null -eq $sponsors) { return @() }
+            return @($sponsors)
         }
 
         # -------------------------------------------------------------------

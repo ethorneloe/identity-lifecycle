@@ -36,7 +36,10 @@ function Invoke-AccountInactivityRemediation {
             2. Extension attribute -- parse 'owner=<sam>' from semicolon-delimited pairs.
                extensionAttribute14 is used as it tends to be spare; swap it in
                Get-ADAccountOwner for whichever attribute your org uses.
-        If neither resolves, the account is skipped with SkipReason='NoOwnerFound'.
+            3. Entra sponsor -- when both AD strategies fail and the account has an
+               EntraObjectId, the sponsor relationship is queried via Get-MgUserSponsor.
+               The first sponsor's Mail address (or UPN) is used as the recipient.
+        If no strategy resolves, the account is skipped with SkipReason='NoOwnerFound'.
 
         OUTPUT
         Never throws. Success, Error, Summary, and Results are always returned. Partial
@@ -320,51 +323,75 @@ function Invoke-AccountInactivityRemediation {
 
             # ----------------------------------------------------------
             # OWNER RESOLUTION
-            # Prefix-strip is tried first (primary -- naming convention is
-            # authoritative). EA14 'owner=<sam>' is the fallback for accounts
-            # that don't follow the naming convention. If neither resolves,
-            # the account is skipped.
+            # Strategies are tried in order; the first that yields a
+            # notification recipient wins.
             #
-            # For Entra-native accounts (Source = 'Entra'), there is no SamAccountName
-            # on the account itself -- it is a cloud-only identity. However, the UPN
-            # follows the same prefix convention (e.g. adm.jsmith@corp.local), so the
-            # local-part before the '@' is used as the prefix-strip input. If that
-            # resolves, it means the person has a standard AD account named 'jsmith'
-            # which is the ownership record we want.
+            # 1. Prefix strip (primary -- naming convention is authoritative):
+            #    strip the leading prefix and separator from the SAM (or UPN
+            #    local-part for Entra-native accounts) and verify the result
+            #    exists in AD. For AD accounts, $sam is the prefixed value
+            #    (e.g. 'adm.jsmith'). For Entra-native accounts, $sam is $null
+            #    but the UPN local-part carries the same prefixed value
+            #    (e.g. 'adm.jsmith@corp.local' → 'adm.jsmith'); both cases
+            #    are passed to Get-ADAccountOwner via $upnLocalPart.
             #
-            # TODO: If neither strategy resolves an owner for an Entra-native account,
-            # a dedicated owner-lookup path for cloud-only identities (e.g. manager
-            # attribute via Graph) is not yet implemented.
+            # 2. Extension attribute: parse 'owner=<sam>' from semicolon-delimited
+            #    key=value pairs. extensionAttribute14 is used as it tends to be
+            #    spare in most environments; swap it in Get-ADAccountOwner for
+            #    whichever attribute your org uses. Only available for AD accounts;
+            #    Entra-native accounts have no extension attribute data.
+            #
+            # 3. Entra sponsor: when AD-based strategies both fail and the account
+            #    has an EntraObjectId, the Entra sponsor relationship is queried via
+            #    Get-MgUserSponsor. The first sponsor's Mail address (or UPN) is used
+            #    as the notification recipient. This is the primary resolution path for
+            #    cloud-native Entra accounts that have no AD owner counterpart.
+            #
+            # If no strategy resolves a recipient, the account is skipped.
             # ----------------------------------------------------------
-            # Get-ADAccountOwner expects the full prefixed name (e.g. 'adm.jsmith') and
-            # strips the prefix internally to derive the standard account candidate
-            # (e.g. 'jsmith'), then verifies that SAM exists in AD.
-            #
-            # For AD accounts, $sam is 'adm.jsmith' -- the prefixed SAM from the directory.
-            # For Entra-native accounts, $sam is $null, but the UPN local-part is the same
-            # value (e.g. 'adm.jsmith@corp.local' → local-part 'adm.jsmith').
-            # In both cases we pass the UPN local-part to keep the logic uniform.
             $upnLocalPart = if ($upn -match '^([^@]+)@') { $Matches[1] } else { $null }
 
             $ownerResult = Get-ADAccountOwner -SamAccountName $upnLocalPart -ExtAttr14 $account.ExtensionAttribute14
 
-            if (-not $ownerResult) {
+            $notifyRecipient = $null
+
+            if ($ownerResult) {
+                # AD-based owner resolved -- look up their email address
+                try {
+                    $ownerEmail = (Get-ADUser -Identity $ownerResult.SamAccountName `
+                            -Properties EmailAddress -ErrorAction Stop).EmailAddress
+                    if ($ownerEmail) { $notifyRecipient = $ownerEmail }
+                }
+                catch { Write-Verbose "Owner email lookup failed for '$($ownerResult.SamAccountName)': $_" }
+
+                if (-not $notifyRecipient) {
+                    $resultList.Add((New-DirectResultEntry -UPN $upn -SamAccountName $sam -InactiveDays $inactiveDays `
+                        -Status 'Skipped' -SkipReason 'NoEmailFound'))
+                    continue
+                }
+            }
+            elseif ($account.EntraObjectId) {
+                # No AD owner -- try Entra sponsor as a last resort
+                try {
+                    $sponsors = @(Get-MgUserSponsor -UserId $account.EntraObjectId -Property 'mail,userPrincipalName' -ErrorAction Stop)
+                    if ($sponsors.Count -gt 0) {
+                        $sponsor = $sponsors[0]
+                        $sponsorEmail = if ($sponsor.Mail) { $sponsor.Mail } else { $sponsor.UserPrincipalName }
+                        if ($sponsorEmail) { $notifyRecipient = $sponsorEmail }
+                    }
+                }
+                catch { Write-Verbose "Entra sponsor lookup failed for '$upn': $_" }
+
+                if (-not $notifyRecipient) {
+                    $resultList.Add((New-DirectResultEntry -UPN $upn -SamAccountName $sam -InactiveDays $inactiveDays `
+                        -Status 'Skipped' -SkipReason 'NoOwnerFound'))
+                    continue
+                }
+            }
+            else {
+                # No AD owner and no EntraObjectId to try sponsor lookup
                 $resultList.Add((New-DirectResultEntry -UPN $upn -SamAccountName $sam -InactiveDays $inactiveDays `
                     -Status 'Skipped' -SkipReason 'NoOwnerFound'))
-                continue
-            }
-
-            $notifyRecipient = $null
-            try {
-                $ownerEmail = (Get-ADUser -Identity $ownerResult.SamAccountName `
-                        -Properties EmailAddress -ErrorAction Stop).EmailAddress
-                if ($ownerEmail) { $notifyRecipient = $ownerEmail }
-            }
-            catch { Write-Verbose "Owner email lookup failed for '$($ownerResult.SamAccountName)': $_" }
-
-            if (-not $notifyRecipient) {
-                $resultList.Add((New-DirectResultEntry -UPN $upn -SamAccountName $sam -InactiveDays $inactiveDays `
-                    -Status 'Skipped' -SkipReason 'NoEmailFound'))
                 continue
             }
 

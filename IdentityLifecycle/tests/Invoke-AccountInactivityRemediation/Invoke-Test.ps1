@@ -49,6 +49,7 @@ $script:MockContext = @{
     ADAccountList        = @()
     EntraAccountList     = @()
     ADUsers              = @{}
+    MgUserSponsors       = @{}
     Actions              = [System.Collections.Generic.List[pscustomobject]]::new()
     NotifyFail           = @()
     DisableFail          = @()
@@ -112,15 +113,16 @@ function Invoke-RemediationOnce {
 function Set-ScenarioContext {
     param($Scenario)
 
-    $script:MockContext.Actions          = [System.Collections.Generic.List[pscustomobject]]::new()
-    $script:MockContext.ADAccountList    = @(if ($Scenario.ContainsKey('ADAccountList'))    { $Scenario.ADAccountList }    else { @() })
-    $script:MockContext.EntraAccountList = @(if ($Scenario.ContainsKey('EntraAccountList')) { $Scenario.EntraAccountList } else { @() })
-    $script:MockContext.ADUsers          = if ($Scenario.ContainsKey('ADUsers'))            { $Scenario.ADUsers }          else { @{} }
-    $script:MockContext.NotifyFail       = @(if ($Scenario.ContainsKey('NotifyFail'))       { $Scenario.NotifyFail }       else { @() })
-    $script:MockContext.DisableFail      = @(if ($Scenario.ContainsKey('DisableFail'))      { $Scenario.DisableFail }      else { @() })
-    $script:MockContext.RemoveFail       = @(if ($Scenario.ContainsKey('RemoveFail'))       { $Scenario.RemoveFail }       else { @() })
-    $script:MockContext.ConnectFail      = if ($Scenario.ContainsKey('ConnectFail'))        { $Scenario.ConnectFail }      else { $false }
-    $script:MockContext.ADAccountListFail = if ($Scenario.ContainsKey('ADAccountListFail')) { $Scenario.ADAccountListFail } else { $false }
+    $script:MockContext.Actions           = [System.Collections.Generic.List[pscustomobject]]::new()
+    $script:MockContext.ADAccountList     = @(if ($Scenario.ContainsKey('ADAccountList'))    { $Scenario.ADAccountList }    else { @() })
+    $script:MockContext.EntraAccountList  = @(if ($Scenario.ContainsKey('EntraAccountList')) { $Scenario.EntraAccountList } else { @() })
+    $script:MockContext.ADUsers           = if ($Scenario.ContainsKey('ADUsers'))            { $Scenario.ADUsers }          else { @{} }
+    $script:MockContext.MgUserSponsors    = if ($Scenario.ContainsKey('MgUserSponsors'))     { $Scenario.MgUserSponsors }   else { @{} }
+    $script:MockContext.NotifyFail        = @(if ($Scenario.ContainsKey('NotifyFail'))       { $Scenario.NotifyFail }       else { @() })
+    $script:MockContext.DisableFail       = @(if ($Scenario.ContainsKey('DisableFail'))      { $Scenario.DisableFail }      else { @() })
+    $script:MockContext.RemoveFail        = @(if ($Scenario.ContainsKey('RemoveFail'))       { $Scenario.RemoveFail }       else { @() })
+    $script:MockContext.ConnectFail       = if ($Scenario.ContainsKey('ConnectFail'))        { $Scenario.ConnectFail }      else { $false }
+    $script:MockContext.ADAccountListFail = if ($Scenario.ContainsKey('ADAccountListFail'))  { $Scenario.ADAccountListFail } else { $false }
 }
 
 function Invoke-Scenario {

@@ -172,11 +172,13 @@ Accounts with `Status = Skipped` are **not** in `Unprocessed` — they were deli
    - Use live logon/sign-in; last resort: WhenCreated from input row
    - If no date at all → Error
    - If InactiveDays < WarnThreshold → Skipped/ActivityDetected
-4. Owner resolution
+4. Owner resolution (first strategy that yields a recipient wins)
    - Prefix strip: strip leading prefix from SamAccountName, verify SAM exists in AD (primary)
-   - Extension attribute 'owner=<sam>' fallback (extensionAttribute14 by convention)
-   - Unresolved → Skipped/NoOwnerFound
-5. Owner email lookup via Get-ADUser -Properties EmailAddress
+   - Extension attribute 'owner=<sam>' fallback (extensionAttribute14; swap for whichever your org uses)
+   - Entra sponsor: if both AD strategies fail and EntraObjectId is present, query Get-MgUserSponsor;
+     first sponsor's Mail (or UPN) is used directly as the notification recipient
+   - All strategies exhausted → Skipped/NoOwnerFound
+5. Owner email lookup via Get-ADUser -Properties EmailAddress (AD-resolved owner only)
    - Empty or failed → Skipped/NoEmailFound
 6. Threshold evaluation → determines ActionTaken and NotificationStage
 7. Send-GraphMail (throws on failure → fatal, loop aborts)
@@ -374,10 +376,10 @@ Replace this with your organisation's AD offboarding process.
 ## Running tests
 
 ```powershell
-# Import-driven sweep (209 assertions)
+# Import-driven sweep (223 assertions)
 . .\IdentityLifecycle\tests\Invoke-AccountInactivityRemediationWithImport\Invoke-Test.ps1
 
-# Discovery sweep (210 assertions)
+# Discovery sweep (224 assertions)
 . .\IdentityLifecycle\tests\Invoke-AccountInactivityRemediation\Invoke-Test.ps1
 
 # Both suites

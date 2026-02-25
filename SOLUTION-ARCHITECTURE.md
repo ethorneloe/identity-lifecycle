@@ -67,7 +67,7 @@ Required Graph application permissions:
 
 | Permission | Type | Purpose |
 |---|---|---|
-| `User.Read.All` | Application | Read user objects and sign-in activity |
+| `User.Read.All` | Application | Read user objects, sign-in activity, and sponsor relationships |
 | `AuditLog.Read.All` | Application | Read `SignInActivity` (last sign-in timestamps) |
 | `Mail.Send` | Application | Send notification emails via `Send-GraphMail` |
 | `User.ReadWrite.All` | Application | Disable and delete Entra accounts |
@@ -123,6 +123,7 @@ Azure Automation (schedule: monthly, or triggered manually)
        │  DisabledSinceExport?      Skip (already actioned by another process)
        │  ActivityDetected?         Skip (account logged on since export)
        Get-ADAccountOwner           Resolve owner: prefix-strip → EA14
+       Get-MgUserSponsor            Fallback if AD strategies fail (requires EntraObjectId)
        │  NoOwnerFound?             Skip (flag for human investigation)
        Threshold evaluation         90d → Warn; 120d → Disable; 180d → Delete
        Send-GraphMail               Notify owner
@@ -151,6 +152,7 @@ Azure Automation (schedule: weekly/monthly, or triggered ad-hoc)
   └─ foreach account:
        Threshold evaluation         Same as import-driven (90/120/180 defaults)
        Get-ADAccountOwner           Owner resolution: UPN local-part → prefix-strip → EA14
+       Get-MgUserSponsor            Fallback if AD strategies fail (requires EntraObjectId)
        Send-GraphMail               Notify owner
        Disable-InactiveAccount      If action = Disable
        Remove-InactiveAccount       If action = Delete and -EnableDeletion set
@@ -231,6 +233,7 @@ Hybrid Runbook Worker                                                  │
         │     ├─ Get-ADUser (per account)          ◄── AD domain       │
         │     ├─ Get-MgUser (per account)          ◄── Graph API       │
         │     ├─ Get-ADUser (owner lookup)         ◄── AD domain       │
+        │     ├─ Get-MgUserSponsor (owner fallback)◄── Graph API       │
         │     ├─ Send-GraphMail (per account)      ──► Graph API ──► Owner's mailbox
         │     ├─ Disable-ADAccount                ──► AD domain
         │     └─ Remove-MgUser                    ──► Graph API
@@ -247,34 +250,40 @@ Hybrid Runbook Worker                                                  │
 ## Owner Resolution
 
 Before any notification or action is taken, the module must identify who owns the
-account. Two strategies are tried in order:
+account. Three strategies are tried in order; the first that yields a notification
+recipient wins:
 
 ```
 1. Prefix strip (primary — naming convention is the authoritative ownership contract)
    admin.jsmith → strip 'admin.' → candidate SAM = 'jsmith'
    Verify 'jsmith' exists in AD → owner confirmed
+   Owner email: Get-ADUser -Properties EmailAddress
 
 2. Extension attribute  (fallback — for accounts that don't follow the naming convention)
    extensionAttribute14 is used as it tends to be spare in most environments; swap it
    in Get-ADAccountOwner for whichever attribute your org uses.
    e.g. extensionAttribute14 = 'dept=IT;owner=jsmith.mgr;location=HQ'
    Parse 'owner=jsmith.mgr' → verify 'jsmith.mgr' exists in AD → owner confirmed
+   Owner email: Get-ADUser -Properties EmailAddress
 
-3. NoOwnerFound (skip — flagged for human investigation)
+3. Entra sponsor  (last resort — for cloud-native accounts and AD accounts with no AD owner)
+   Requires EntraObjectId to be present on the account.
+   Get-MgUserSponsor → first sponsor's Mail address (or UserPrincipalName if Mail is empty)
+   Used directly as the notification recipient — no AD email lookup needed.
+   This is the primary path for cloud-native Entra accounts that have no AD counterpart.
+
+4. NoOwnerFound (skip — flagged for human investigation)
    Account appears in Results with SkipReason = 'NoOwnerFound'
    No notification sent; no action taken
-   A human must assign an owner (fix the SAM naming or set the owner= key in the
-   extension attribute) before the account will be processed on the next run
+   A human must assign an owner (fix the SAM naming, set the owner= extension attribute
+   key, or assign an Entra sponsor) before the account will be processed on the next run
 ```
 
-Owner's email address is resolved via `Get-ADUser -Properties EmailAddress`. If the
-lookup fails or the `EmailAddress` field is empty, the account is skipped with
-`SkipReason = 'NoEmailFound'` — the same fail-fast behaviour as `NoOwnerFound`. No
-notification or action is attempted with a null recipient.
-
-**Gap — cloud-only Entra accounts:** For Entra-native accounts whose UPN prefix does not
-resolve to an AD standard account, the Graph `manager` attribute is a natural fallback
-that has not yet been implemented. These accounts currently always reach `NoOwnerFound`.
+Owner's AD email address (strategies 1 and 2) is resolved via
+`Get-ADUser -Properties EmailAddress`. If the lookup fails or `EmailAddress` is empty,
+the account is skipped with `SkipReason = 'NoEmailFound'` — no notification or action
+is attempted with a null recipient. Strategy 3 (Entra sponsor) bypasses this step since
+the sponsor's address comes directly from Graph.
 
 ---
 
@@ -340,7 +349,7 @@ the run succeeded or failed:
       NotificationSent      : bool
       NotificationRecipient : string
       Status                : string   -- Completed | Skipped | Error
-      SkipReason            : string   -- ActivityDetected | DisabledSinceExport | NoOwnerFound | null
+      SkipReason            : string   -- ActivityDetected | DisabledSinceExport | NoOwnerFound | NoEmailFound | null
       Error                 : string
       Timestamp             : string   -- ISO 8601 UTC
     }
@@ -384,7 +393,6 @@ results are always returned** even when an exception aborts the run mid-batch.
 |---|---|---|
 | `Send-GraphMail` not implemented | **Blocking** | No production notifications can be sent |
 | `Remove-InactiveAccount` AD path is a stub | **Blocking for AD deletion** | Entra deletion works; AD throws. Replace stub with org offboarding process |
-| Entra-native owner resolution via Graph manager | Medium | Cloud-only accounts without AD standard account always reach `NoOwnerFound` |
 | Azure Automation runbook wrappers | Medium | Library functions need thin runbook wrappers that retrieve credentials and write results |
 | `RequiredModules` in manifest | Low | `ActiveDirectory` and `Microsoft.Graph.*` not declared; worker fails at runtime rather than manifest validation |
 

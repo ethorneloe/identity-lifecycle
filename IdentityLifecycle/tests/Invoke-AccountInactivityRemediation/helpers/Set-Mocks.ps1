@@ -19,6 +19,9 @@ function Set-Mocks {
                               (objects shaped like New-RemediationEntraAccount output)
             ADUsers         - hashtable of SamAccountName (lower) -> fake ADUser object
                               Used for owner resolution and owner email lookup (Get-ADUser)
+            MgUserSponsors  - hashtable of EntraObjectId (lower) -> pscustomobject[]
+                              Each sponsor object should have Mail and/or UserPrincipalName.
+                              $null or missing key = no sponsors (empty result).
             Actions         - List[pscustomobject] of captured action records
                               { Action, UPN, Stage, Recipient }
             NotifyFail      - string[] of UPNs for which Send-GraphMail throws
@@ -117,6 +120,24 @@ function Set-Mocks {
             }
 
             return $null
+        }
+
+        # -------------------------------------------------------------------
+        # Get-MgUserSponsor mock
+        # Keyed by EntraObjectId (lowercased). Returns sponsor objects with
+        # Mail and/or UserPrincipalName. Returns empty array when key is absent.
+        # -------------------------------------------------------------------
+        function script:Get-MgUserSponsor {
+            param(
+                $UserId,
+                [string[]] $Property,
+                $ErrorAction
+            )
+            $ctx = $script:RemediationMockCtx
+            $key = $UserId.ToString().ToLower()
+            $sponsors = $ctx.MgUserSponsors[$key]
+            if ($null -eq $sponsors) { return @() }
+            return @($sponsors)
         }
 
         # -------------------------------------------------------------------

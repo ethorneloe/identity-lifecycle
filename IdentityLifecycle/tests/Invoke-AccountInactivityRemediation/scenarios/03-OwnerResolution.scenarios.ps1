@@ -145,6 +145,105 @@ $Scenarios = @(
                 Assert-ActionNotFired 'Disable' '$upn' 'No Disable fired'
 "@)
         }
+    ),
+
+    # ------------------------------------------------------------------
+    # 03-07: AD account -- prefix-strip and EA14 fail, Entra sponsor resolves
+    # ------------------------------------------------------------------
+    $(
+        $sam = 'shared.nosam07'; $upn = 'shared.nosam07@corp.local'
+        $entraId = 'oid-sponsor-ad-07'
+        $sponsorEmail = 'sponsor07@corp.local'
+        @{
+            Name     = '03-07: AD account -- AD owner strategies fail, Entra sponsor resolves'
+            ADAccountList = @(
+                # No recognised prefix → prefix-strip yields no match
+                # EntraObjectId set so sponsor lookup can run
+                New-RemediationADAccount -SamAccountName $sam -UPN $upn -LastLogonDaysAgo 95 `
+                    -WhenCreatedDaysAgo 300
+            )
+            # Give the AD account an EntraObjectId by overriding the object after creation
+            # The working-set builder assigns EntraObjectId from the synced Entra match.
+            # Simpler: add a matching synced Entra account so the merger wires the OID in.
+            EntraAccountList = @(
+                New-RemediationEntraAccount -EntraObjectId $entraId -UPN $upn `
+                    -AccountEnabled $true -LastSignInDaysAgo 95 -OnPremisesSyncEnabled $true
+            )
+            ADUsers        = @{}    # no owner SAM → prefix-strip and EA14 both fail
+            MgUserSponsors = @{
+                $entraId = @(
+                    [pscustomobject]@{ Mail = $sponsorEmail; UserPrincipalName = 'sponsor07-upn@corp.local' }
+                )
+            }
+            AssertAfterRun = [scriptblock]::Create(@"
+                param(`$result, `$ctx)
+                Assert-SummaryField `$result.Summary 'Warned' 1 'Warned = 1 (sponsor resolved)'
+                Assert-ResultField  `$result.Results '$upn' 'Status'                'Completed'     'Status = Completed'
+                Assert-ResultField  `$result.Results '$upn' 'NotificationRecipient' '$sponsorEmail' 'Recipient = Entra sponsor Mail'
+                Assert-ActionFired  'Notify' '$upn' 'Notify fired'
+"@)
+        }
+    ),
+
+    # ------------------------------------------------------------------
+    # 03-08: Entra-native account (no SAM) -- sponsor resolves via UPN fallback
+    # ------------------------------------------------------------------
+    $(
+        $upn = 'adm.cloudonly08@corp.local'
+        $entraId = 'oid-sponsor-entra-08'
+        $sponsorUpn = 'sponsorupn08@corp.local'
+        @{
+            Name     = '03-08: Entra-native account (no SAM) -- sponsor resolves via UPN'
+            ADAccountList    = @()
+            EntraAccountList = @(
+                # Cloud-native (OnPremisesSyncEnabled=$false) -- no AD counterpart
+                New-RemediationEntraAccount -EntraObjectId $entraId -UPN $upn `
+                    -AccountEnabled $true -LastSignInDaysAgo 95 -OnPremisesSyncEnabled $false `
+                    -CreatedDateTimeDaysAgo 400
+            )
+            ADUsers        = @{}
+            MgUserSponsors = @{
+                $entraId = @(
+                    # Mail is empty -- orchestrator should fall back to UserPrincipalName
+                    [pscustomobject]@{ Mail = ''; UserPrincipalName = $sponsorUpn }
+                )
+            }
+            AssertAfterRun = [scriptblock]::Create(@"
+                param(`$result, `$ctx)
+                Assert-SummaryField `$result.Summary 'Warned' 1 'Warned = 1 (sponsor via UPN fallback)'
+                Assert-ResultField  `$result.Results '$upn' 'Status'                'Completed'  'Status = Completed'
+                Assert-ResultField  `$result.Results '$upn' 'NotificationRecipient' '$sponsorUpn' 'Recipient = sponsor UPN'
+                Assert-ActionFired  'Notify' '$upn' 'Notify fired'
+"@)
+        }
+    ),
+
+    # ------------------------------------------------------------------
+    # 03-09: Entra-native account -- no sponsor set, NoOwnerFound
+    # ------------------------------------------------------------------
+    $(
+        $upn = 'adm.nosponsor09@corp.local'
+        $entraId = 'oid-no-sponsor-09'
+        @{
+            Name     = '03-09: Entra-native account -- no Entra sponsor set, NoOwnerFound'
+            ADAccountList    = @()
+            EntraAccountList = @(
+                New-RemediationEntraAccount -EntraObjectId $entraId -UPN $upn `
+                    -AccountEnabled $true -LastSignInDaysAgo 95 -OnPremisesSyncEnabled $false `
+                    -CreatedDateTimeDaysAgo 400
+            )
+            ADUsers        = @{}
+            MgUserSponsors = @{}   # no entry for this ID → mock returns empty array
+            AssertAfterRun = [scriptblock]::Create(@"
+                param(`$result, `$ctx)
+                Assert-SummaryField `$result.Summary 'Skipped' 1 'Skipped = 1'
+                Assert-SummaryField `$result.Summary 'NoOwner' 1 'NoOwner = 1'
+                Assert-ResultField  `$result.Results '$upn' 'Status'     'Skipped'      'Status = Skipped'
+                Assert-ResultField  `$result.Results '$upn' 'SkipReason' 'NoOwnerFound' 'SkipReason = NoOwnerFound'
+                Assert-ActionNotFired 'Notify'  '$upn' 'No Notify fired'
+                Assert-ActionNotFired 'Disable' '$upn' 'No Disable fired'
+"@)
+        }
     )
 
 )
