@@ -28,17 +28,23 @@ function Set-Mocks {
                                $null or missing key = no sponsors (empty result).
             Actions          - List[pscustomobject] of captured action records
                                { Action, UPN, Stage, Recipient }
-            NotifyFail       - string[] of UPNs for which Send-GraphMail throws
-            DisableFail      - string[] of UPNs for which Disable-InactiveAccount fails
-            RemoveFail       - string[] of UPNs for which Remove-InactiveAccount fails
-            ConnectFail      - $true to make Connect-MgGraph throw
+            NotifyFail        - string[] of UPNs for which Send-GraphMail throws
+            DisableFail       - string[] of UPNs for which Disable-InactiveAccount fails
+            RemoveFail        - string[] of UPNs for which Remove-InactiveAccount fails
+            ConnectFail       - $true to make Connect-MgGraph throw
             ADAccountListFail - $true to make Get-PrefixedADAccounts throw
+            MidBatchAbortOnUPN - string[] of UPNs for which Get-ADAccountOwner throws bare,
+                               aborting the foreach loop mid-batch so remaining accounts
+                               are never reached (tests the "never reached" Unprocessed path)
 
-        Functions that run for real (not mocked):
-            Get-ADAccountOwner               - exercised via mocked Get-ADUser
-            New-InactiveAccountLifecycleMessage - exercised
-            Resolve-EntraSignIn              - sign-in max logic exercised (import mode)
-            ConvertTo-Bool                   - inline helper, exercised (import mode)
+        Functions overridden or run for real:
+            Get-ADAccountOwner               - OVERRIDDEN in module scope; runs real prefix-strip +
+                                               EA14 logic for most accounts; throws bare (escaping
+                                               the per-account try/catch) for SAMs listed in
+                                               MidBatchAbortOnUPN (tests "never reached" Unprocessed path)
+            New-InactiveAccountLifecycleMessage - exercised (runs for real)
+            Resolve-EntraSignIn              - sign-in max logic exercised (import mode, runs for real)
+            ConvertTo-Bool                   - inline helper, exercised (import mode, runs for real)
     #>
     param(
         [Parameter(Mandatory)]
@@ -190,10 +196,10 @@ function Set-Mocks {
             $fail      = $ctx.NotifyFail -contains $upn
 
             $ctx.Actions.Add([pscustomobject]@{
-                Action    = 'Notify'
-                UPN       = $upn
-                Stage     = $null
-                Recipient = $recipient
+                Action            = 'Notify'
+                UserPrincipalName = $upn
+                Stage             = $null
+                Recipient         = $recipient
             })
 
             if ($fail) {
@@ -207,14 +213,14 @@ function Set-Mocks {
         function script:Disable-InactiveAccount {
             param($Account)
             $ctx  = $script:RemediationMockCtx
-            $upn  = if ($Account.UPN) { $Account.UPN } else { $Account.SamAccountName }
+            $upn  = if ($Account.UserPrincipalName) { $Account.UserPrincipalName } else { $Account.SamAccountName }
             $fail = $ctx.DisableFail -contains $upn
 
             $ctx.Actions.Add([pscustomobject]@{
-                Action    = 'Disable'
-                UPN       = $upn
-                Stage     = $null
-                Recipient = $null
+                Action            = 'Disable'
+                UserPrincipalName = $upn
+                Stage             = $null
+                Recipient         = $null
             })
 
             return [pscustomobject]@{
@@ -229,20 +235,73 @@ function Set-Mocks {
         function script:Remove-InactiveAccount {
             param($Account)
             $ctx  = $script:RemediationMockCtx
-            $upn  = if ($Account.UPN) { $Account.UPN } else { $Account.SamAccountName }
+            $upn  = if ($Account.UserPrincipalName) { $Account.UserPrincipalName } else { $Account.SamAccountName }
             $fail = $ctx.RemoveFail -contains $upn
 
             $ctx.Actions.Add([pscustomobject]@{
-                Action    = 'Remove'
-                UPN       = $upn
-                Stage     = $null
-                Recipient = $null
+                Action            = 'Remove'
+                UserPrincipalName = $upn
+                Stage             = $null
+                Recipient         = $null
             })
 
             return [pscustomobject]@{
                 Success = (-not $fail)
                 Message = if ($fail) { 'Mock: forced remove failure' } else { "Mock: removed $upn" }
             }
+        }
+
+        # -------------------------------------------------------------------
+        # Get-ADAccountOwner override (mid-batch abort simulation)
+        # Normally the real implementation runs for all accounts. When
+        # MidBatchAbortOnUPN contains the SAM being resolved, this override
+        # throws bare (no per-account try/catch wraps this call site in the
+        # orchestrator), so the outer catch fires and the foreach loop aborts,
+        # leaving any remaining accounts unreached -- testing source 2 of
+        # the Unprocessed block (never-reached accounts).
+        # For all other SAMs the real prefix-strip + EA14 logic is replicated.
+        # -------------------------------------------------------------------
+        function script:Get-ADAccountOwner {
+            param(
+                [string]   $SamAccountName,
+                [string]   $ExtAttr14,
+                [string[]] $Prefixes = @('admin.', 'priv.')
+            )
+            $ctx = $script:RemediationMockCtx
+            if ($ctx.MidBatchAbortOnUPN -and $ctx.MidBatchAbortOnUPN -contains $SamAccountName) {
+                throw "Mock: Get-ADAccountOwner fatal abort for '$SamAccountName'"
+            }
+
+            # Real logic: prefix strip (longest-first) then EA14
+            # Prefix values include the separator (e.g. 'admin.') so no [._] in regex
+            if ($SamAccountName) {
+                foreach ($prefix in ($Prefixes | Sort-Object { $_.Length } -Descending)) {
+                    if ($SamAccountName -match "^$([regex]::Escape($prefix))(.+)$") {
+                        $candidate = $Matches[1]
+                        try {
+                            if (Get-ADUser -Filter "SamAccountName -eq '$candidate'" -ErrorAction Stop) {
+                                return [pscustomobject]@{ SamAccountName = $candidate; ResolvedBy = 'PrefixStrip' }
+                            }
+                        } catch {}
+                        break
+                    }
+                }
+            }
+            if ($ExtAttr14) {
+                foreach ($pair in ($ExtAttr14 -split ';')) {
+                    if ($pair.Trim() -match '(?i)^owner=(.+)$') {
+                        $candidate = $Matches[1].Trim()
+                        if ($candidate) {
+                            try {
+                                if (Get-ADUser -Filter "SamAccountName -eq '$candidate'" -ErrorAction Stop) {
+                                    return [pscustomobject]@{ SamAccountName = $candidate; ResolvedBy = 'ExtensionAttribute14' }
+                                }
+                            } catch {}
+                        }
+                    }
+                }
+            }
+            return $null
         }
 
     }

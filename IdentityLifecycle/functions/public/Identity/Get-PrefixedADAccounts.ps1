@@ -17,7 +17,8 @@
         and avoid downstream [Guid] vs [string] comparison issues.
 
     .PARAMETER Prefixes
-        One or more SAMAccountName prefixes, e.g. @('admin','priv').
+        One or more SAMAccountName prefixes including the separator character,
+        e.g. @('admin.','priv.').
 
     .PARAMETER SearchBase
         Distinguished name of the OU to scope the search.
@@ -27,7 +28,7 @@
         LastLogonDate, Created, ExtensionAttribute14, Description.
 
     .EXAMPLE
-        $adAccounts = Get-PrefixedADAccounts -Prefixes @('admin','priv') `
+        $adAccounts = Get-PrefixedADAccounts -Prefixes @('admin.','priv.') `
                                              -SearchBase 'OU=PrivilegedAccounts,DC=corp,DC=gov,DC=au'
     #>
     [CmdletBinding()]

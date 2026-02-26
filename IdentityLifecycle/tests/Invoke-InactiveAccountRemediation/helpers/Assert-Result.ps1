@@ -103,7 +103,7 @@ function Assert-ActionFired {
         [string] $Scenario = $script:CurrentScenario,
         [int]    $Run      = $script:CurrentRun
     )
-    $found  = @($script:MockContext.Actions | Where-Object { $_.Action -eq $Action -and $_.UPN -eq $UPN })
+    $found  = @($script:MockContext.Actions | Where-Object { $_.Action -eq $Action -and $_.UserPrincipalName -eq $UPN })
     $pass   = ($found.Count -gt 0)
     $detail = "$Action on $UPN"
     $actual = if ($pass) { $detail } else { 'not fired' }
@@ -119,7 +119,7 @@ function Assert-ActionNotFired {
         [int]    $Run      = $script:CurrentRun
     )
     $found  = @($script:MockContext.Actions | Where-Object {
-        $_.Action -eq $Action -and ($null -eq $UPN -or $_.UPN -eq $UPN)
+        $_.Action -eq $Action -and ($null -eq $UPN -or $_.UserPrincipalName -eq $UPN)
     })
     $pass   = ($found.Count -eq 0)
     $actual = if ($pass) { 'not fired' } else { "fired $($found.Count) time(s)" }
@@ -136,7 +136,7 @@ function Assert-ResultField {
         [string] $Scenario = $script:CurrentScenario,
         [int]    $Run      = $script:CurrentRun
     )
-    $entry  = @($Results | Where-Object { $_.UPN -eq $UPN }) | Select-Object -First 1
+    $entry  = @($Results | Where-Object { $_.UserPrincipalName -eq $UPN }) | Select-Object -First 1
     $actual = if ($null -eq $entry) { '(no entry)' } else { $entry.$Field }
     $pass   = ($actual -eq $Expected)
     Add-AssertionResult -Scenario $Scenario -Run $Run -Assertion $Message -Expected $Expected -Actual $actual -Pass $pass

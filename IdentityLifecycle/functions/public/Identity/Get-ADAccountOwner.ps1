@@ -7,13 +7,13 @@ function Get-ADAccountOwner {
         Attempts to identify the owning standard account in two steps, in order:
 
             1. Prefix strip -- matches the SamAccountName against each supplied prefix
-               followed by a single separator character (dot or underscore), and treats
-               the remainder as the candidate standard SAM
-               (e.g. prefix 'ca', SAM 'ca.jsmith' -> candidate 'jsmith').
+               (which must include the separator character, e.g. 'ca.' or 'adm_') and
+               treats the remainder as the candidate standard SAM
+               (e.g. prefix 'ca.', SAM 'ca.jsmith' -> candidate 'jsmith').
                The candidate is verified to exist in AD before being returned.
                This is the primary strategy because the naming convention is the
                authoritative ownership contract. Prefixes are tried longest-first so
-               a prefix 'adm' is not shadowed by 'ad' if both are supplied.
+               a prefix 'adm.' is not shadowed by 'ad.' if both are supplied.
 
             2. Extension attribute -- looks for an 'owner=<sam>' key=value pair in a
                semicolon-delimited string (e.g. 'dept=IT;owner=jsmith.mgr;location=HQ').
@@ -37,9 +37,10 @@ function Get-ADAccountOwner {
         skipped in that case.
 
     .PARAMETER Prefixes
-        The set of known SAMAccountName prefixes, e.g. @('ca','adm','sup'). Passed in from
-        the orchestrator so owner resolution uses the same prefix list as account discovery.
-        Default: @('admin','priv') as a safe fallback, but callers should always pass the
+        The set of known SAMAccountName prefixes including the separator character,
+        e.g. @('ca.','adm.','sup_'). Passed in from the orchestrator so owner resolution
+        uses the same prefix list as account discovery.
+        Default: @('admin.','priv.') as a safe fallback, but callers should always pass the
         same list they use for Get-PrefixedADAccounts.
 
     .OUTPUTS
@@ -50,7 +51,7 @@ function Get-ADAccountOwner {
 
     .EXAMPLE
         $owner = Get-ADAccountOwner -SamAccountName 'ca.jsmith' `
-                     -Prefixes @('ca','adm','sup') `
+                     -Prefixes @('ca.','adm.','sup_') `
                      -ExtAttr14 'dept=IT;owner=jsmith.mgr'
         if ($owner) {
             Write-Host "Owner resolved via $($owner.ResolvedBy): $($owner.SamAccountName)"
@@ -66,19 +67,19 @@ function Get-ADAccountOwner {
         [string] $ExtAttr14,
 
         [Parameter()]
-        [string[]] $Prefixes = @('admin', 'priv')
+        [string[]] $Prefixes = @('admin.', 'priv.')
     )
 
     # ------------------------------------------------------------------
     # Strategy 1: prefix strip (primary -- naming convention is authoritative)
     # Try each known prefix (longest first to avoid partial matches).
-    # Strip the prefix and one separator character (dot or underscore).
-    # e.g. prefix 'ca',  SAM 'ca.jsmith'  -> candidate 'jsmith'
-    #      prefix 'adm', SAM 'adm_jsmith' -> candidate 'jsmith'
+    # The prefix must include the separator character (e.g. 'ca.' or 'adm_').
+    # e.g. prefix 'ca.',  SAM 'ca.jsmith'  -> candidate 'jsmith'
+    #      prefix 'adm_', SAM 'adm_jsmith' -> candidate 'jsmith'
     # ------------------------------------------------------------------
     if ($SamAccountName) {
         foreach ($prefix in ($Prefixes | Sort-Object { $_.Length } -Descending)) {
-            if ($SamAccountName -match "^$([regex]::Escape($prefix))[._](.+)$") {
+            if ($SamAccountName -match "^$([regex]::Escape($prefix))(.+)$") {
                 $candidate = $Matches[1]
                 try {
                     if (Get-ADUser -Filter "SamAccountName -eq '$candidate'" -ErrorAction Stop) {

@@ -61,6 +61,7 @@ $script:MockContext = @{
     RemoveFail           = @()
     ConnectFail          = $false
     ADAccountListFail    = $false
+    MidBatchAbortOnUPN   = @()
 }
 
 # ---------------------------------------------------------------------------
@@ -99,7 +100,7 @@ function Invoke-ImportOnce {
 
     $params = @{
         Accounts                  = $Accounts
-        Prefixes                  = @('admin', 'priv', 'cloud')
+        Prefixes                  = @('admin.', 'priv.', 'cloud.')
         MailSender                = 'iam-automation@corp.local'
         MailClientId              = 'mock-mail-client-id'
         MailTenantId              = 'mock-mail-tenant-id'
@@ -133,7 +134,7 @@ function Invoke-DiscoveryOnce {
     )
 
     $params = @{
-        Prefixes                  = @('admin', 'priv')
+        Prefixes                  = @('admin.', 'priv.')
         ADSearchBase              = 'OU=PrivilegedAccounts,DC=corp,DC=gov,DC=au'
         MailSender                = 'iam-automation@corp.local'
         MailClientId              = 'mock-mail-client-id'
@@ -169,7 +170,8 @@ function Set-ScenarioContext {
     $script:MockContext.DisableFail       = @(if ($Scenario.ContainsKey('DisableFail'))      { $Scenario.DisableFail }      else { @() })
     $script:MockContext.RemoveFail        = @(if ($Scenario.ContainsKey('RemoveFail'))       { $Scenario.RemoveFail }       else { @() })
     $script:MockContext.ConnectFail       = if ($Scenario.ContainsKey('ConnectFail'))        { $Scenario.ConnectFail }      else { $false }
-    $script:MockContext.ADAccountListFail = if ($Scenario.ContainsKey('ADAccountListFail'))  { $Scenario.ADAccountListFail } else { $false }
+    $script:MockContext.ADAccountListFail  = if ($Scenario.ContainsKey('ADAccountListFail'))   { $Scenario.ADAccountListFail }   else { $false }
+    $script:MockContext.MidBatchAbortOnUPN = @(if ($Scenario.ContainsKey('MidBatchAbortOnUPN')) { $Scenario.MidBatchAbortOnUPN } else { @() })
 }
 
 function Invoke-Scenario {

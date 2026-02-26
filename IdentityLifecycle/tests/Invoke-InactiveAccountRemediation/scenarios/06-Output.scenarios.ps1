@@ -298,6 +298,81 @@ $Scenarios = @(
                 Assert-Count @(`$result2.Unprocessed) 0                 '[import-run2] Unprocessed is empty after re-run'
 "@)
         }
+    ),
+
+    # ------------------------------------------------------------------
+    # 06-13: Mid-batch abort [import] -- completed account absent from
+    # Unprocessed; aborted + unreached accounts both present
+    # ------------------------------------------------------------------
+    $(
+        $sam1 = 'admin.mba13a'; $upn1 = 'admin.mba13a@corp.local'; $std1 = 'mba13a'
+        $sam2 = 'admin.mba13b'; $upn2 = 'admin.mba13b@corp.local'; $std2 = 'mba13b'
+        $sam3 = 'admin.mba13c'; $upn3 = 'admin.mba13c@corp.local'; $std3 = 'mba13c'
+        @{
+            Name               = '06-13: [Import] Mid-batch abort -- completed account not in Unprocessed; aborted + unreached accounts are'
+            Why                = 'When a fatal exception aborts the loop mid-batch, Unprocessed must contain the account that triggered the abort and all subsequent accounts that were never reached. Accounts that already completed must not appear -- they were actioned successfully.'
+            MidBatchAbortOnUPN = @($sam2)
+            Accounts           = @(
+                New-ImportTestAccount -SamAccountName $sam1 -UPN $upn1 -InactiveDaysAgo 95
+                New-ImportTestAccount -SamAccountName $sam2 -UPN $upn2 -InactiveDaysAgo 95
+                New-ImportTestAccount -SamAccountName $sam3 -UPN $upn3 -InactiveDaysAgo 95
+            )
+            ADUsers = @{
+                $sam1 = New-ImportADUser -SamAccountName $sam1 -UPN $upn1 `
+                    -LastLogonDate ([datetime]::UtcNow.AddDays(-95)) -WhenCreatedDaysAgo 300 -Enabled $true
+                $std1 = New-ImportADUser -SamAccountName $std1 -UPN "$std1@corp.local" -Enabled $true
+                $sam2 = New-ImportADUser -SamAccountName $sam2 -UPN $upn2 `
+                    -LastLogonDate ([datetime]::UtcNow.AddDays(-95)) -WhenCreatedDaysAgo 300 -Enabled $true
+                $sam3 = New-ImportADUser -SamAccountName $sam3 -UPN $upn3 `
+                    -LastLogonDate ([datetime]::UtcNow.AddDays(-95)) -WhenCreatedDaysAgo 300 -Enabled $true
+            }
+            AssertAfterRun = [scriptblock]::Create(@"
+                param(`$result, `$ctx)
+                Assert-False `$result.Success '[import] Success = false (fatal abort)'
+                Assert-Count @(`$result.Results) 1 '[import] Results has 1 entry (account 1 only)'
+                Assert-ResultField `$result.Results '$upn1' 'Status' 'Completed' '[import] account 1 = Completed'
+                Assert-Count @(`$result.Unprocessed) 2 '[import] Unprocessed has 2 entries (aborted + unreached)'
+                `$upns = @(`$result.Unprocessed | ForEach-Object { `$_.UserPrincipalName })
+                Assert-True (`$upns -contains '$upn2') '[import] account 2 (aborted) is in Unprocessed'
+                Assert-True (`$upns -contains '$upn3') '[import] account 3 (unreached) is in Unprocessed'
+                Assert-True (`$upns -notcontains '$upn1') '[import] account 1 (completed) is NOT in Unprocessed'
+"@)
+        }
+    ),
+
+    # ------------------------------------------------------------------
+    # 06-14: Mid-batch abort [discovery] -- same guarantees in discovery mode
+    # ------------------------------------------------------------------
+    $(
+        $sam1 = 'admin.mba14a'; $upn1 = 'admin.mba14a@corp.local'; $std1 = 'mba14a'
+        $sam2 = 'admin.mba14b'; $upn2 = 'admin.mba14b@corp.local'; $std2 = 'mba14b'
+        $sam3 = 'admin.mba14c'; $upn3 = 'admin.mba14c@corp.local'; $std3 = 'mba14c'
+        @{
+            Name               = '06-14: [Discovery] Mid-batch abort -- completed account not in Unprocessed; aborted + unreached accounts are'
+            Why                = 'Discovery mode must provide the same Unprocessed guarantees as import mode -- a mid-batch abort must not silently drop the remaining accounts.'
+            MidBatchAbortOnUPN = @($sam2)
+            ADAccountList      = @(
+                New-DiscoveryADAccount -SamAccountName $sam1 -UPN $upn1 -LastLogonDaysAgo 95 -WhenCreatedDaysAgo 300
+                New-DiscoveryADAccount -SamAccountName $sam2 -UPN $upn2 -LastLogonDaysAgo 95 -WhenCreatedDaysAgo 300
+                New-DiscoveryADAccount -SamAccountName $sam3 -UPN $upn3 -LastLogonDaysAgo 95 -WhenCreatedDaysAgo 300
+            )
+            ADUsers = @{
+                $std1 = New-DiscoveryOwnerADUser -SamAccountName $std1 -EmailAddress "$std1@corp.local"
+                $std2 = New-DiscoveryOwnerADUser -SamAccountName $std2 -EmailAddress "$std2@corp.local"
+                $std3 = New-DiscoveryOwnerADUser -SamAccountName $std3 -EmailAddress "$std3@corp.local"
+            }
+            AssertAfterRun = [scriptblock]::Create(@"
+                param(`$result, `$ctx)
+                Assert-False `$result.Success '[disc] Success = false (fatal abort)'
+                Assert-Count @(`$result.Results) 1 '[disc] Results has 1 entry (account 1 only)'
+                Assert-ResultField `$result.Results '$upn1' 'Status' 'Completed' '[disc] account 1 = Completed'
+                Assert-Count @(`$result.Unprocessed) 2 '[disc] Unprocessed has 2 entries (aborted + unreached)'
+                `$upns = @(`$result.Unprocessed | ForEach-Object { `$_.UserPrincipalName })
+                Assert-True (`$upns -contains '$upn2') '[disc] account 2 (aborted) is in Unprocessed'
+                Assert-True (`$upns -contains '$upn3') '[disc] account 3 (unreached) is in Unprocessed'
+                Assert-True (`$upns -notcontains '$upn1') '[disc] account 1 (completed) is NOT in Unprocessed'
+"@)
+        }
     )
 
 )

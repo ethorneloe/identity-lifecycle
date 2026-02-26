@@ -19,7 +19,7 @@ configurable inactivity thresholds.
 │                                                                             │
 │  ┌──────────────────────────────────────────────────────────────────────┐  │
 │  │  Runbook (PowerShell)                                                │  │
-│  │  · Retrieves credentials from Key Vault                              │  │
+│  │  · Retrieves credentials from secure storage                         │  │
 │  │  · Imports IdentityLifecycle module                                  │  │
 │  │  · Calls Invoke-InactiveAccountRemediation                           │  │
 │  │  · Writes result to Log Analytics / Storage                          │  │
@@ -32,7 +32,7 @@ configurable inactivity thresholds.
 │  │  · Domain-joined server with RSAT (ActiveDirectory module)           │  │
 │  │  · Has AD read/write access within scope OU                          │  │
 │  │  · Outbound HTTPS to Graph API (api.graph.microsoft.com)             │  │
-│  │  · Outbound HTTPS to Azure Automation and Key Vault                  │  │
+│  │  · Outbound HTTPS to Azure Automation                                │  │
 │  │  · IdentityLifecycle module installed in PowerShell module path      │  │
 │  └──────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -89,9 +89,9 @@ Required permissions:
 
 | Secret | Stored in | Retrieved by |
 |---|---|---|
-| Graph read app certificate | Azure Key Vault | Automation runbook via managed identity |
-| Mail service principal certificate | Azure Key Vault | Automation runbook via managed identity |
-| Mail sender mailbox UPN (`MailSender`) | Automation variable or Key Vault | Runbook at runtime |
+| Graph read app certificate | Secure storage (e.g. Automation credential or encrypted variable) | Runbook at runtime |
+| Mail service principal certificate | Secure storage | Runbook at runtime |
+| Mail sender mailbox UPN (`MailSender`) | Automation variable | Runbook at runtime |
 | Graph read tenant ID / client ID | Automation variable (not secret) | Runbook at runtime |
 | Mail tenant ID / client ID | Automation variable (not secret) | Runbook at runtime |
 
@@ -246,7 +246,7 @@ Azure Blob Storage  ────────────────────
 Hybrid Runbook Worker                                                  │
         │                                                              │
         ├─ Import-Module IdentityLifecycle                             │
-        ├─ Connect-MgGraph (certificate from Key Vault)                │
+        ├─ Connect-MgGraph (certificate)                                │
         │                                                              │
         ├─ Invoke-InactiveAccountRemediation -Accounts -Prefixes       │
         │     │                                                        │
@@ -294,7 +294,7 @@ recipient wins:
 
 ```
 1. Prefix strip (primary — naming convention is the authoritative ownership contract)
-   admin.jsmith → strip 'admin' prefix → candidate SAM = 'jsmith'
+   admin.jsmith → strip 'admin.' prefix → candidate SAM = 'jsmith'
    Verify 'jsmith' exists in AD → owner confirmed
    Owner email: Get-ADUser -Properties EmailAddress
 
@@ -383,7 +383,7 @@ of whether the run succeeded or failed:
   }
   Results      : [        -- one entry per processed account
     {
-      UPN                   : string
+      UserPrincipalName     : string
       SamAccountName        : string
       InactiveDays          : int?
       ActionTaken           : string   -- None | Notify | Disable | Delete
@@ -394,7 +394,6 @@ of whether the run succeeded or failed:
       SkipReason            : string   -- NoUPN | ActivityDetected | DisabledSinceExport | NoOwnerFound | NoEmailFound | null
       Error                 : string
       Timestamp             : string   -- ISO 8601 UTC
-      InputRow              : object   -- set only when owner is confirmed; used internally for Unprocessed
     }
   ]
   Unprocessed  : [        -- accounts that can be retried on next run
@@ -412,14 +411,17 @@ of whether the run succeeded or failed:
 }
 ```
 
-**`Unprocessed` contains accounts where the owner was confirmed but something downstream
-failed** — mail error, action error, or a mid-batch abort after owner resolution. These
-are the accounts worth automated retry.
+**`Unprocessed` contains accounts from two sources:**
+
+1. **Owner confirmed, downstream failed** — owner was resolved and a valid notification
+   recipient confirmed, but then something mechanical failed (mail error or action error).
+2. **Never reached** — a fatal exception aborted the loop mid-batch; these accounts
+   have no result entry and are passed through from the working list.
 
 Accounts skipped with `NoUPN`, `ActivityDetected`, `DisabledSinceExport`, or
 `NoOwnerFound` are deliberate decisions and are **not** in `Unprocessed`. Early-exit
 failures before owner resolution (no SAM + no EntraObjectId, AD lookup error) are also
-excluded — these require human investigation.
+excluded — these require human investigation rather than automated retry.
 
 The shape of each `Unprocessed` entry exactly matches the import contract of
 `Invoke-InactiveAccountRemediation -Accounts`, so `$result.Unprocessed` can be
@@ -428,7 +430,7 @@ produced the original run:
 
 ```powershell
 $result2 = Invoke-InactiveAccountRemediation `
-    -Accounts $result.Unprocessed -Prefixes @('admin','priv') -MailSender 'iam@corp.local' ...
+    -Accounts $result.Unprocessed -Prefixes @('admin.','priv.') -MailSender 'iam@corp.local' ...
 ```
 
 Summary, Results, and Unprocessed are all built in a `finally` block so **partial
@@ -452,9 +454,10 @@ results are always returned** even when an exception aborts the run mid-batch.
 - **Principle of least privilege:** The Graph application and AD service account should
   have only the permissions listed above — no Global Administrator, no broader write
   access than the target OU.
-- **Certificate authentication only:** No client secrets. Certificates are rotated on a
-  schedule and stored in Key Vault; the Automation managed identity retrieves them.
-- **No credentials in code or runbooks:** All secrets come from Key Vault at runtime.
+- **Certificate authentication only:** No client secrets. Certificates should be rotated
+  on a schedule and stored in secure storage outside the runbook.
+- **No credentials in code or runbooks:** All secrets should be retrieved from secure
+  storage at runtime rather than hardcoded.
 - **Audit trail:** Every account action is recorded in the `Results` array with a
   timestamp. The runbook should write this to Log Analytics or Blob Storage for
   retention and audit.

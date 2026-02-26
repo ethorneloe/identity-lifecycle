@@ -18,14 +18,14 @@ function Get-PrefixedEntraAccounts {
         requires the AuditLog.Read.All or Reports.Read.All permission.
 
     .PARAMETER Prefixes
-        One or more UPN prefixes, e.g. @('admin','priv').
+        One or more UPN prefixes including the separator character, e.g. @('admin.','priv.').
 
     .OUTPUTS
         [pscustomobject] with fields: EntraObjectId, UserPrincipalName, Enabled,
         OnPremisesSyncEnabled, entraLastSignInAEST, Created.
 
     .EXAMPLE
-        $entraAccounts = Get-PrefixedEntraAccounts -Prefixes @('admin','priv')
+        $entraAccounts = Get-PrefixedEntraAccounts -Prefixes @('admin.','priv.')
     #>
     [CmdletBinding()]
     [OutputType([pscustomobject])]

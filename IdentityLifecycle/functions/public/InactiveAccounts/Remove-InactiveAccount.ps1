@@ -36,7 +36,7 @@ function Remove-InactiveAccount {
         [pscustomobject] $Account
     )
 
-    $target = if ($null -ne $Account.UPN) { $Account.UPN } else { $Account.SamAccountName }
+    $target = if ($null -ne $Account.UserPrincipalName) { $Account.UserPrincipalName } else { $Account.SamAccountName }
 
     try {
 

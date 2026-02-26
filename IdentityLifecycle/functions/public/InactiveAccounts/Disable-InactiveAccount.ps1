@@ -25,7 +25,7 @@
     .EXAMPLE
         $result = Disable-InactiveAccount -Account $account
         if ($result.Success) {
-            Set-InactiveAccountStateRow -Upn $account.UPN -Stage 'Disabled' ...
+            Set-InactiveAccountStateRow -Upn $account.UserPrincipalName -Stage 'Disabled' ...
         }
     #>
     [CmdletBinding(SupportsShouldProcess)]
@@ -35,7 +35,7 @@
         [pscustomobject] $Account
     )
 
-    $target = if ($null -ne $Account.UPN) { $Account.UPN } else { $Account.SamAccountName }
+    $target = if ($null -ne $Account.UserPrincipalName) { $Account.UserPrincipalName } else { $Account.SamAccountName }
 
     try {
         if ($Account.Source -eq 'AD') {

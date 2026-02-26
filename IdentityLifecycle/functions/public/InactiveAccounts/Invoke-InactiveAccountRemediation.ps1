@@ -44,9 +44,9 @@ function Invoke-InactiveAccountRemediation {
         OWNER RESOLUTION
         For all accounts, owner is resolved in this order:
             1. Prefix strip: match SamAccountName (or UPN local-part for Entra-native
-               accounts) against the supplied -Prefixes followed by a separator (dot or
-               underscore); the remainder is the candidate standard SAM
-               (e.g. prefix 'ca', SAM 'ca.jsmith' -> 'jsmith'). Verified against AD.
+               accounts) against the supplied -Prefixes (which must include the separator
+               character, e.g. 'ca.'); the remainder is the candidate standard SAM
+               (e.g. prefix 'ca.', SAM 'ca.jsmith' -> 'jsmith'). Verified against AD.
                Primary strategy — naming convention is authoritative.
             2. Extension attribute: parse 'owner=<sam>' from semicolon-delimited
                key=value pairs. extensionAttribute14 is used as it tends to be spare;
@@ -88,7 +88,8 @@ function Invoke-InactiveAccountRemediation {
         Requires -Prefixes. Mutually exclusive with -ADSearchBase.
 
     .PARAMETER Prefixes
-        One or more SAMAccountName / UPN prefixes to target, e.g. @('admin','priv').
+        One or more SAMAccountName / UPN prefixes to target, including the separator
+        character, e.g. @('admin.','priv.').
         Required in both parameter sets:
           - Discovery mode: passed to Get-PrefixedADAccounts and Get-PrefixedEntraAccounts
             to scope which accounts are discovered.
@@ -161,7 +162,7 @@ function Invoke-InactiveAccountRemediation {
     .EXAMPLE
         # Discovery mode: sweep all admin/priv accounts and enable deletion
         Invoke-InactiveAccountRemediation `
-            -Prefixes                    @('admin','priv') `
+            -Prefixes                    @('admin.','priv.') `
             -ADSearchBase                'OU=PrivilegedAccounts,DC=corp,DC=gov,DC=au' `
             -MailSender                  'iam-automation@corp.local' `
             -MailClientId                $mailAppId `
@@ -244,7 +245,7 @@ function Invoke-InactiveAccountRemediation {
     # ------------------------------------------------------------------
     function script:New-ResultEntry {
         param(
-            [string]        $UPN,
+            [string]        $UserPrincipalName,
             [string]        $SamAccountName,
             [nullable[int]] $InactiveDays,
             [string]        $ActionTaken = 'None',
@@ -257,7 +258,7 @@ function Invoke-InactiveAccountRemediation {
             [pscustomobject] $InputRow        # import-contract row; set only when owner is known
         )
         [pscustomobject]@{
-            UPN                   = $UPN
+            UserPrincipalName     = $UserPrincipalName
             SamAccountName        = $SamAccountName
             InactiveDays          = $InactiveDays
             ActionTaken           = $ActionTaken
@@ -424,7 +425,7 @@ function Invoke-InactiveAccountRemediation {
                         $extAttr14     = $adUser.extensionAttribute14
                     }
                     catch {
-                        $resultList.Add((New-ResultEntry -UPN $upn -SamAccountName $sam `
+                        $resultList.Add((New-ResultEntry -UserPrincipalName $upn -SamAccountName $sam `
                             -Status 'Error' -ErrorMessage "AD lookup failed: $_"))
                         continue
                     }
@@ -440,7 +441,7 @@ function Invoke-InactiveAccountRemediation {
                 else {
                     # Entra-native account -- no SAM, must have an EntraObjectId
                     if (-not $entraObjectId) {
-                        $resultList.Add((New-ResultEntry -UPN $upn `
+                        $resultList.Add((New-ResultEntry -UserPrincipalName $upn `
                             -Status 'Error' -ErrorMessage 'Account has no SamAccountName or EntraObjectId.'))
                         continue
                     }
@@ -451,7 +452,7 @@ function Invoke-InactiveAccountRemediation {
                         $liveLastSignIn = Resolve-EntraSignIn $mgUser
                     }
                     catch {
-                        $resultList.Add((New-ResultEntry -UPN $upn `
+                        $resultList.Add((New-ResultEntry -UserPrincipalName $upn `
                             -Status 'Error' -ErrorMessage "Entra lookup failed: $_"))
                         continue
                     }
@@ -459,7 +460,7 @@ function Invoke-InactiveAccountRemediation {
 
                 # Disabled since export → already actioned elsewhere, skip
                 if ($enabledCheck -eq $false -and (ConvertTo-Bool $row.Enabled) -eq $true) {
-                    $resultList.Add((New-ResultEntry -UPN $upn -SamAccountName $sam `
+                    $resultList.Add((New-ResultEntry -UserPrincipalName $upn -SamAccountName $sam `
                         -Status 'Skipped' -SkipReason 'DisabledSinceExport'))
                     continue
                 }
@@ -496,7 +497,7 @@ function Invoke-InactiveAccountRemediation {
             }
 
             if (-not $lastActivity) {
-                $resultList.Add((New-ResultEntry -UPN $upn -SamAccountName $sam -Status 'Error' `
+                $resultList.Add((New-ResultEntry -UserPrincipalName $upn -SamAccountName $sam -Status 'Error' `
                     -ErrorMessage 'Cannot determine last activity: no LastLogonDate, LastSignInEntra, or WhenCreated.'))
                 continue
             }
@@ -505,7 +506,7 @@ function Invoke-InactiveAccountRemediation {
 
             # Below warn threshold -- account is active enough, skip silently
             if ($inactiveDays -lt $WarnThreshold) {
-                $resultList.Add((New-ResultEntry -UPN $upn -SamAccountName $sam -InactiveDays $inactiveDays `
+                $resultList.Add((New-ResultEntry -UserPrincipalName $upn -SamAccountName $sam -InactiveDays $inactiveDays `
                     -Status 'Skipped' -SkipReason 'ActivityDetected'))
                 continue
             }
@@ -556,7 +557,7 @@ function Invoke-InactiveAccountRemediation {
                 catch { Write-Verbose "Owner email lookup failed for '$($ownerResult.SamAccountName)': $_" }
 
                 if (-not $notifyRecipient) {
-                    $resultList.Add((New-ResultEntry -UPN $upn -SamAccountName $sam -InactiveDays $inactiveDays `
+                    $resultList.Add((New-ResultEntry -UserPrincipalName $upn -SamAccountName $sam -InactiveDays $inactiveDays `
                         -Status 'Skipped' -SkipReason 'NoEmailFound'))
                     continue
                 }
@@ -574,14 +575,14 @@ function Invoke-InactiveAccountRemediation {
                 catch { Write-Verbose "Entra sponsor lookup failed for '$upn': $_" }
 
                 if (-not $notifyRecipient) {
-                    $resultList.Add((New-ResultEntry -UPN $upn -SamAccountName $sam -InactiveDays $inactiveDays `
+                    $resultList.Add((New-ResultEntry -UserPrincipalName $upn -SamAccountName $sam -InactiveDays $inactiveDays `
                         -Status 'Skipped' -SkipReason 'NoOwnerFound'))
                     continue
                 }
             }
             else {
                 # No AD owner and no EntraObjectId to try sponsor lookup
-                $resultList.Add((New-ResultEntry -UPN $upn -SamAccountName $sam -InactiveDays $inactiveDays `
+                $resultList.Add((New-ResultEntry -UserPrincipalName $upn -SamAccountName $sam -InactiveDays $inactiveDays `
                     -Status 'Skipped' -SkipReason 'NoOwnerFound'))
                 continue
             }
@@ -607,8 +608,8 @@ function Invoke-InactiveAccountRemediation {
 
             # Working account object for action functions
             $workingAccount = [pscustomobject]@{
-                UPN            = $upn
-                SamAccountName = $sam
+                UserPrincipalName = $upn
+                SamAccountName    = $sam
                 Source         = if ($sam) { 'AD' } else { 'Entra' }
                 EntraObjectId  = $entraObjectId
                 LastActivity   = $lastActivity
@@ -655,7 +656,7 @@ function Invoke-InactiveAccountRemediation {
             }
 
             if ($mailError) {
-                $resultList.Add((New-ResultEntry -UPN $upn -SamAccountName $sam -InactiveDays $inactiveDays `
+                $resultList.Add((New-ResultEntry -UserPrincipalName $upn -SamAccountName $sam -InactiveDays $inactiveDays `
                     -ActionTaken $actionTaken -NotificationStage $notificationStage `
                     -NotificationRecipient $notifyRecipient `
                     -Status 'Error' -ErrorMessage $mailError -InputRow $inputRow))
@@ -701,7 +702,7 @@ function Invoke-InactiveAccountRemediation {
 
             $actionInputRow = if ($actionError) { $inputRow } else { $null }
             $resultList.Add((New-ResultEntry `
-                -UPN $upn -SamAccountName $sam -InactiveDays $inactiveDays `
+                -UserPrincipalName $upn -SamAccountName $sam -InactiveDays $inactiveDays `
                 -ActionTaken $actionTaken -NotificationStage $notificationStage `
                 -NotificationSent $notifySent -NotificationRecipient $notifyRecipient `
                 -Status $entryStatus -ErrorMessage $actionError -InputRow $actionInputRow))
@@ -734,12 +735,26 @@ function Invoke-InactiveAccountRemediation {
         $output.Summary = $summary
         $output.Results = $resultList.ToArray()
 
-        # Unprocessed: result entries where the owner was resolved but the action could
-        # not be completed (notification or account action failed). InputRow is set on
-        # these entries during the loop; filtering here is a single expression with no
-        # mode branching. Always shaped as the import contract for direct re-run.
+        # Unprocessed: two sources, both shaped as the import contract for direct re-run.
+        #
+        # 1. Result entries where the owner was confirmed but something downstream failed
+        #    (mail error or action error). InputRow is set on these entries only after
+        #    owner resolution succeeds; early-exit failures (no UPN, no SAM+OID, AD lookup
+        #    error, no owner found) carry no InputRow and are not retryable automatically.
+        #
+        # 2. Working-list rows that were never reached because a fatal exception aborted
+        #    the loop mid-batch. These have no result entry at all.
+        $processedUpns = [System.Collections.Generic.HashSet[string]]::new(
+            [System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($r in $resultList) {
+            if ($r.UserPrincipalName) { $processedUpns.Add($r.UserPrincipalName) | Out-Null }
+        }
+
         $output.Unprocessed = @(
+            # Source 1: errored result entries with a resolvable owner
             $resultList | Where-Object { $_.InputRow } | ForEach-Object { $_.InputRow }
+            # Source 2: working-list rows never reached (no result entry written)
+            $workingList | Where-Object { $_.UserPrincipalName -and -not $processedUpns.Contains($_.UserPrincipalName) }
         )
 
         if (-not $UseExistingGraphSession) {
