@@ -123,6 +123,30 @@ $Scenarios = @(
                 Assert-ResultField  `$result.Results '$upnC' 'Status' 'Skipped'   'cloud = Skipped'
 "@)
         }
+    ),
+
+    # ------------------------------------------------------------------
+    # 06-06: NotificationRecipientOverride -- mail goes to override, real owner still in result
+    # ------------------------------------------------------------------
+    $(
+        $sam = 'admin.over06'; $upn = 'admin.over06@corp.local'; $std = 'over06'
+        $override = 'test-inbox@corp.local'
+        @{
+            Name          = '06-06: NotificationRecipientOverride -- mail redirected, real owner recorded'
+            ADAccountList = @(
+                New-RemediationADAccount -SamAccountName $sam -UPN $upn -LastLogonDaysAgo 95 -WhenCreatedDaysAgo 300
+            )
+            ADUsers = @{
+                $std = New-RemediationOwnerADUser -SamAccountName $std -EmailAddress 'real-owner@corp.local'
+            }
+            NotificationRecipientOverride = $override
+            AssertAfterRun = [scriptblock]::Create(@"
+                param(`$result, `$ctx)
+                Assert-SummaryField `$result.Summary 'Warned' 1 'Warned = 1'
+                Assert-Equal `$result.Results[0].NotificationRecipient 'real-owner@corp.local' 'Real owner recorded in result'
+                Assert-Equal (`$ctx.Actions | Where-Object { `$_.Action -eq 'Notify' } | Select-Object -First 1).Recipient '$override' 'Mail sent to override address'
+"@)
+        }
     )
 
 )

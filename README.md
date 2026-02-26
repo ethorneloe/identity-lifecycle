@@ -54,7 +54,8 @@ tests/
 
 - PowerShell 5.1+
 - `ActiveDirectory` module (RSAT)
-- `Microsoft.Graph` module (`Connect-MgGraph` pre-authenticated, or pass `-ClientId/-TenantId/-CertificateThumbprint`)
+- `Microsoft.Graph` module (`Connect-MgGraph` pre-authenticated, or pass `-ClientId/-TenantId/-CertificateThumbprint` for the Graph read principal)
+- A `Send-GraphMail` implementation available in the session (not part of this module); requires a separate mail service principal with `Mail.Send`
 
 ---
 
@@ -64,7 +65,7 @@ Pass an array of objects via `-Accounts`. The expected fields match a standard d
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `UserPrincipalName` | string | Yes | Primary key; rows with no value are silently discarded |
+| `UserPrincipalName` | string | Yes | Primary key; rows with no value produce a `Skipped/NoUPN` result entry |
 | `SamAccountName` | string | AD accounts | Used for AD lookup and owner resolution; absent for Entra-native |
 | `Enabled` | bool/string | No | Enabled state at export time; used to detect disable-since-export |
 | `LastLogonDate` | datetime/string | No | Present in export; not used — live query always replaces it |
@@ -86,26 +87,29 @@ Routing is determined by field presence, not by `Source` or `OnPremisesSyncEnabl
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `-Accounts` | object[] | Mandatory | Input account rows |
-| `-Sender` | string | Mandatory | Mailbox UPN for Graph mail (needs Mail.Send) |
+| `-MailSender` | string | Mandatory | Mailbox UPN used as the From address for notification emails |
+| `-MailClientId` | string | Mandatory | Application (client) ID of the mail service principal |
+| `-MailTenantId` | string | Mandatory | Entra tenant ID for the mail service principal |
+| `-MailCertificateThumbprint` | string | Mandatory | Certificate thumbprint for the mail service principal |
 | `-WarnThreshold` | int | 90 | Inactivity days to trigger Warning notification |
 | `-DisableThreshold` | int | 120 | Inactivity days to disable account |
 | `-DeleteThreshold` | int | 180 | Inactivity days to delete account |
 | `-EnableDeletion` | switch | Off | Actually call Remove-InactiveAccount; without this, accounts at DeleteThreshold are disabled with a Deletion notification but not removed |
-| `-ClientId` | string | — | Certificate param set: Entra app ID |
-| `-TenantId` | string | — | Certificate param set: Entra tenant ID |
-| `-CertificateThumbprint` | string | — | Certificate param set: cert thumbprint |
+| `-NotificationRecipientOverride` | string | — | When set, all notifications go to this address instead of the resolved owner. The real owner is still recorded in the result for auditability. Use during testing to avoid notifying real owners. |
+| `-ClientId` | string | — | Certificate param set: Entra app ID for Graph read access |
+| `-TenantId` | string | — | Certificate param set: Entra tenant ID for Graph read access |
+| `-CertificateThumbprint` | string | — | Certificate param set: cert thumbprint for Graph read access |
 | `-UseExistingGraphSession` | switch | Off | Skip Graph connect/disconnect |
 | `-WhatIf` | switch | — | Preview actions without executing them |
 
 ### Discovery sweep
 
-Same threshold and Graph connection parameters, plus:
+Same parameters as the import-driven sweep, plus:
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `-Prefixes` | string[] | Mandatory | SAM/UPN prefixes to target, e.g. `@('admin','priv')` |
 | `-ADSearchBase` | string | Mandatory | Distinguished name of the OU to scope AD discovery |
-| `-Sender` | string | Mandatory | Mailbox UPN for Graph mail |
 
 ---
 
@@ -125,11 +129,11 @@ Both functions always return a `[pscustomobject]` — they never throw. Partial 
 
 | Field | Meaning |
 |---|---|
-| `Total` | Accounts that produced a result entry (excludes no-UPN rows) |
+| `Total` | Accounts that produced a result entry (includes NoUPN skips) |
 | `Warned` | Accounts successfully notified at Warning stage |
 | `Disabled` | Accounts successfully disabled |
 | `Deleted` | Accounts successfully deleted |
-| `Skipped` | Accounts skipped (`ActivityDetected`, `DisabledSinceExport`, `NoOwnerFound`, or `NoEmailFound`) |
+| `Skipped` | Accounts skipped (`NoUPN`, `ActivityDetected`, `DisabledSinceExport`, `NoOwnerFound`, or `NoEmailFound`) |
 | `Errors` | Accounts where at least one step failed |
 | `NoOwner` | Accounts skipped because no owner could be resolved |
 
@@ -143,9 +147,9 @@ Both functions always return a `[pscustomobject]` — they never throw. Partial 
 | `ActionTaken` | string | `None`, `Notify`, `Disable`, `Delete` |
 | `NotificationStage` | string | `Warning`, `Disabled`, `Deletion`, or null |
 | `NotificationSent` | bool | |
-| `NotificationRecipient` | string | Address the email went to |
+| `NotificationRecipient` | string | Address the real owner's email resolves to; this is always the owner's address regardless of any `NotificationRecipientOverride` |
 | `Status` | string | `Completed`, `Skipped`, or `Error` |
-| `SkipReason` | string | `ActivityDetected`, `DisabledSinceExport`, `NoOwnerFound`, `NoEmailFound`, or null |
+| `SkipReason` | string | `NoUPN`, `ActivityDetected`, `DisabledSinceExport`, `NoOwnerFound`, `NoEmailFound`, or null |
 | `Error` | string | Error detail if any step failed; null otherwise |
 | `Timestamp` | string | ISO 8601 UTC |
 
@@ -160,7 +164,7 @@ Accounts with `Status = Skipped` are **not** in `Unprocessed` — they were deli
 ## Execution flow (per account)
 
 ```
-1. Skip rows with no UPN
+1. Rows with no UPN → result entry with Status=Skipped, SkipReason=NoUPN
 2. Live check
    a. AD path (SamAccountName present):
       - Get-ADUser → live Enabled, LastLogonDate, extensionAttribute14
@@ -201,11 +205,14 @@ Import-Module .\IdentityLifecycle
 $accounts = Import-Csv 'C:\Reports\InactivePrivAccounts.csv'
 
 $result = Invoke-AccountInactivityRemediationWithImport `
-    -Accounts              $accounts `
-    -Sender                'iam-automation@corp.local' `
-    -ClientId              $appId `
-    -TenantId              $tenantId `
-    -CertificateThumbprint $thumb `
+    -Accounts                  $accounts `
+    -MailSender                'iam-automation@corp.local' `
+    -MailClientId              $mailAppId `
+    -MailTenantId              $tenantId `
+    -MailCertificateThumbprint $mailThumb `
+    -ClientId                  $graphAppId `
+    -TenantId                  $tenantId `
+    -CertificateThumbprint     $graphThumb `
     -EnableDeletion
 
 $result.Summary
@@ -214,11 +221,14 @@ $result.Results | Where-Object { $_.Status -eq 'Error' } | Select-Object UPN, Er
 # Re-run for any accounts that failed or were not reached
 if ($result.Unprocessed) {
     $retry = Invoke-AccountInactivityRemediationWithImport `
-        -Accounts              $result.Unprocessed `
-        -Sender                'iam-automation@corp.local' `
-        -ClientId              $appId `
-        -TenantId              $tenantId `
-        -CertificateThumbprint $thumb `
+        -Accounts                  $result.Unprocessed `
+        -MailSender                'iam-automation@corp.local' `
+        -MailClientId              $mailAppId `
+        -MailTenantId              $tenantId `
+        -MailCertificateThumbprint $mailThumb `
+        -ClientId                  $graphAppId `
+        -TenantId                  $tenantId `
+        -CertificateThumbprint     $graphThumb `
         -EnableDeletion
 }
 ```
@@ -229,12 +239,15 @@ if ($result.Unprocessed) {
 Import-Module .\IdentityLifecycle
 
 $result = Invoke-AccountInactivityRemediation `
-    -Prefixes              @('admin', 'priv') `
-    -ADSearchBase          'OU=PrivilegedAccounts,DC=corp,DC=local' `
-    -Sender                'iam-automation@corp.local' `
-    -ClientId              $appId `
-    -TenantId              $tenantId `
-    -CertificateThumbprint $thumb `
+    -Prefixes                  @('admin', 'priv') `
+    -ADSearchBase              'OU=PrivilegedAccounts,DC=corp,DC=local' `
+    -MailSender                'iam-automation@corp.local' `
+    -MailClientId              $mailAppId `
+    -MailTenantId              $tenantId `
+    -MailCertificateThumbprint $mailThumb `
+    -ClientId                  $graphAppId `
+    -TenantId                  $tenantId `
+    -CertificateThumbprint     $graphThumb `
     -EnableDeletion
 
 $result.Summary
@@ -243,11 +256,14 @@ $result.Results | Where-Object { $_.Status -eq 'Error' } | Select-Object UPN, Er
 # Re-run failures via the import-driven sweep (Unprocessed is already import-contract shaped)
 if ($result.Unprocessed) {
     $retry = Invoke-AccountInactivityRemediationWithImport `
-        -Accounts              $result.Unprocessed `
-        -Sender                'iam-automation@corp.local' `
-        -ClientId              $appId `
-        -TenantId              $tenantId `
-        -CertificateThumbprint $thumb `
+        -Accounts                  $result.Unprocessed `
+        -MailSender                'iam-automation@corp.local' `
+        -MailClientId              $mailAppId `
+        -MailTenantId              $tenantId `
+        -MailCertificateThumbprint $mailThumb `
+        -ClientId                  $graphAppId `
+        -TenantId                  $tenantId `
+        -CertificateThumbprint     $graphThumb `
         -EnableDeletion
 }
 ```
@@ -257,7 +273,9 @@ if ($result.Unprocessed) {
 Both functions support `-WhatIf`. Passing it suppresses all side effects (no emails sent, no accounts disabled or deleted) while still running the full live check and threshold evaluation and returning a complete result object:
 
 ```powershell
-$result = Invoke-AccountInactivityRemediationWithImport -Accounts $accounts -Sender 'iam@corp.local' `
+$result = Invoke-AccountInactivityRemediationWithImport `
+    -Accounts $accounts `
+    -MailSender 'iam@corp.local' -MailClientId $mailAppId -MailTenantId $tenantId -MailCertificateThumbprint $mailThumb `
     -UseExistingGraphSession -WhatIf
 
 $result.Results | Format-Table UPN, InactiveDays, ActionTaken, NotificationStage, SkipReason
@@ -273,8 +291,9 @@ The same import-driven function handles all patterns below by varying the input 
 
 ```powershell
 $result = Invoke-AccountInactivityRemediationWithImport `
-    -Accounts $accounts -Sender 'iam-automation@corp.local' `
-    -ClientId $appId -TenantId $tenantId -CertificateThumbprint $thumb `
+    -Accounts $accounts `
+    -MailSender 'iam-automation@corp.local' -MailClientId $mailAppId -MailTenantId $tenantId -MailCertificateThumbprint $mailThumb `
+    -ClientId $graphAppId -TenantId $tenantId -CertificateThumbprint $graphThumb `
     -EnableDeletion
 ```
 
@@ -290,10 +309,11 @@ Omit `-EnableDeletion`. Accounts at the delete threshold receive a Deletion noti
 $disabledOld = Import-Csv 'C:\Reports\DisabledPrivAccounts-180plus.csv'
 
 $result = Invoke-AccountInactivityRemediationWithImport `
-    -Accounts $disabledOld -Sender 'iam-automation@corp.local' `
+    -Accounts $disabledOld `
+    -MailSender 'iam-automation@corp.local' -MailClientId $mailAppId -MailTenantId $tenantId -MailCertificateThumbprint $mailThumb `
     -WarnThreshold 1 -DisableThreshold 1 -DeleteThreshold 180 `
     -EnableDeletion `
-    -ClientId $appId -TenantId $tenantId -CertificateThumbprint $thumb
+    -ClientId $graphAppId -TenantId $tenantId -CertificateThumbprint $graphThumb
 ```
 
 Already-disabled accounts skip the disable call and go straight to removal.
@@ -302,16 +322,18 @@ Already-disabled accounts skip the disable call and go straight to removal.
 
 ```powershell
 $result = Invoke-AccountInactivityRemediationWithImport `
-    -Accounts $accounts -Sender 'iam-automation@corp.local' `
+    -Accounts $accounts `
+    -MailSender 'iam-automation@corp.local' -MailClientId $mailAppId -MailTenantId $tenantId -MailCertificateThumbprint $mailThumb `
     -WarnThreshold 90 -DisableThreshold 99999 -DeleteThreshold 99999 `
-    -ClientId $appId -TenantId $tenantId -CertificateThumbprint $thumb
+    -ClientId $graphAppId -TenantId $tenantId -CertificateThumbprint $graphThumb
 ```
 
 ### Mode 5 — Preview with -WhatIf
 
 ```powershell
 $result = Invoke-AccountInactivityRemediationWithImport `
-    -Accounts $accounts -Sender 'iam-automation@corp.local' `
+    -Accounts $accounts `
+    -MailSender 'iam-automation@corp.local' -MailClientId $mailAppId -MailTenantId $tenantId -MailCertificateThumbprint $mailThumb `
     -EnableDeletion -UseExistingGraphSession -WhatIf
 
 $result.Summary
@@ -323,14 +345,16 @@ $result.Results | Format-Table UPN, InactiveDays, ActionTaken, NotificationStage
 ```powershell
 # Run 1
 $result = Invoke-AccountInactivityRemediationWithImport `
-    -Accounts $accounts -Sender 'iam-automation@corp.local' `
-    -ClientId $appId -TenantId $tenantId -CertificateThumbprint $thumb -EnableDeletion
+    -Accounts $accounts `
+    -MailSender 'iam-automation@corp.local' -MailClientId $mailAppId -MailTenantId $tenantId -MailCertificateThumbprint $mailThumb `
+    -ClientId $graphAppId -TenantId $tenantId -CertificateThumbprint $graphThumb -EnableDeletion
 
 # Run 2 — retry only what was not resolved
 if ($result.Unprocessed) {
     $result2 = Invoke-AccountInactivityRemediationWithImport `
-        -Accounts $result.Unprocessed -Sender 'iam-automation@corp.local' `
-        -ClientId $appId -TenantId $tenantId -CertificateThumbprint $thumb -EnableDeletion
+        -Accounts $result.Unprocessed `
+        -MailSender 'iam-automation@corp.local' -MailClientId $mailAppId -MailTenantId $tenantId -MailCertificateThumbprint $mailThumb `
+        -ClientId $graphAppId -TenantId $tenantId -CertificateThumbprint $graphThumb -EnableDeletion
 }
 ```
 
@@ -340,26 +364,26 @@ The same pattern works when `Unprocessed` comes from the discovery sweep — bot
 
 ## Known gaps / stubs
 
-### `Send-GraphMail` — not implemented
+### `Send-GraphMail` — not implemented in this module
 
-The orchestrators call `Send-GraphMail` but no such function exists in the module yet. The test suites mock it. Before running in production you must implement it.
+The orchestrators call `Send-GraphMail` but it is not part of this module. The test suites mock it. Before running in production you must supply an implementation (e.g. from a shared utilities module).
 
-Expected signature:
+The orchestrators call it with this signature:
 
 ```powershell
-function Send-GraphMail {
-    param(
-        [string]   $Sender,
-        [string[]] $ToRecipients,
-        [string]   $Subject,
-        [string]   $Body,
-        [string]   $BodyType = 'HTML',
-        [string]   $ErrorAction
-    )
-}
+Send-GraphMail `
+    -Sender                'iam-automation@corp.local' `
+    -ClientID              $MailClientId `
+    -Tenant                $MailTenantId `
+    -CertificateThumbprint $MailCertificateThumbprint `
+    -ToRecipients          @('owner@corp.local') `
+    -Subject               'Subject text -- account@corp.local' `
+    -Body                  '<html>...</html>' `
+    -BodyType              'HTML' `
+    -ErrorAction           Stop
 ```
 
-It should send via `Send-MgUserMail` or the Graph `sendMail` endpoint. The connected identity needs `Mail.Send` delegated to the `-Sender` mailbox.
+Note that the mail service principal (`-ClientID`, `-Tenant`, `-CertificateThumbprint`) is a separate app registration from the Graph read principal used for `Connect-MgGraph`. `Send-GraphMail` is expected to manage its own authentication internally using those credentials. The app registration requires `Mail.Send` application permission.
 
 ### `Remove-InactiveAccount` — AD path is a stub
 
@@ -376,10 +400,10 @@ Replace this with your organisation's AD offboarding process.
 ## Running tests
 
 ```powershell
-# Import-driven sweep (223 assertions)
+# Import-driven sweep (230 assertions)
 . .\IdentityLifecycle\tests\Invoke-AccountInactivityRemediationWithImport\Invoke-Test.ps1
 
-# Discovery sweep (224 assertions)
+# Discovery sweep (227 assertions)
 . .\IdentityLifecycle\tests\Invoke-AccountInactivityRemediation\Invoke-Test.ps1
 
 # Both suites

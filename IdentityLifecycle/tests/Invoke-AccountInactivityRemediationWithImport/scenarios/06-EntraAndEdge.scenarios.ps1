@@ -172,20 +172,57 @@ $Scenarios = @(
     ),
 
     # ------------------------------------------------------------------
-    # 06-06: Accounts with only no-UPN rows -- zero result entries, no errors
+    # 06-06: Accounts with only no-UPN rows -- recorded as Skipped/NoUPN, no errors
     # (PowerShell cannot bind an empty @() to a mandatory [object[]] param,
-    #  so we pass one row without a UPN which the function silently discards.)
+    #  so we pass one row without a UPN to exercise the NoUPN skip path.)
     # ------------------------------------------------------------------
     $(
         @{
-            Name     = '06-06: Accounts with only no-UPN rows -- zero result entries, no error'
+            Name     = '06-06: Accounts with only no-UPN rows -- Skipped/NoUPN, no error'
             Accounts = @([pscustomobject]@{ SamAccountName = ''; UserPrincipalName = '' })
             ADUsers  = @{}
             AssertAfterRun = [scriptblock]::Create(@"
                 param(`$result, `$ctx)
-                Assert-SummaryField `$result.Summary 'Total'  0 'Total = 0'
-                Assert-SummaryField `$result.Summary 'Errors' 0 'Errors = 0'
+                Assert-SummaryField `$result.Summary 'Total'   1 'Total = 1'
+                Assert-SummaryField `$result.Summary 'Skipped' 1 'Skipped = 1'
+                Assert-SummaryField `$result.Summary 'Errors'  0 'Errors = 0'
                 Assert-True `$result.Success 'Success = true (no errors)'
+"@)
+        }
+    ),
+
+    # ------------------------------------------------------------------
+    # 06-08: NotificationRecipientOverride -- mail goes to override, real owner still in result
+    # ------------------------------------------------------------------
+    $(
+        $sam = 'admin.over08'; $upn = 'admin.over08@corp.local'; $std = 'over08'
+        $override = 'test-inbox@corp.local'
+        @{
+            Name    = '06-08: NotificationRecipientOverride -- mail redirected, real owner recorded'
+            Accounts = @(
+                [pscustomobject]@{
+                    SamAccountName      = $sam
+                    UserPrincipalName   = $upn
+                    LastLogonDate       = [datetime]::UtcNow.AddDays(-95).ToString('o')
+                    Created             = [datetime]::UtcNow.AddDays(-300).ToString('o')
+                    Enabled             = 'True'
+                    EntraObjectId       = ''
+                    entraLastSignInAEST = ''
+                    Description         = ''
+                }
+            )
+            ADUsers = @{
+                $sam = New-ImportADUser -SamAccountName $sam -UPN $upn `
+                    -LastLogonDate ([datetime]::UtcNow.AddDays(-95)) -WhenCreatedDaysAgo 300 -Enabled $true
+                $std = New-ImportADUser -SamAccountName $std -UPN "$std@corp.local" `
+                    -Enabled $true -EmailAddress 'real-owner@corp.local'
+            }
+            NotificationRecipientOverride = $override
+            AssertAfterRun = [scriptblock]::Create(@"
+                param(`$result, `$ctx)
+                Assert-SummaryField `$result.Summary 'Warned' 1 'Warned = 1'
+                Assert-Equal `$result.Results[0].NotificationRecipient 'real-owner@corp.local' 'Real owner recorded in result'
+                Assert-Equal (`$ctx.Actions | Where-Object { `$_.Action -eq 'Notify' } | Select-Object -First 1).Recipient '$override' 'Mail sent to override address'
 "@)
         }
     ),

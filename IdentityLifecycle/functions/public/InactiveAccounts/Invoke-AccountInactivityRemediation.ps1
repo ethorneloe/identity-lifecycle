@@ -53,9 +53,18 @@ function Invoke-AccountInactivityRemediation {
         Distinguished name of the OU to scope the AD search, e.g.
         'OU=PrivilegedAccounts,DC=corp,DC=gov,DC=au'.
 
-    .PARAMETER Sender
-        Mailbox UPN from which notifications are sent via Send-GraphMail. Requires
-        Mail.Send permission for the connected Graph identity.
+    .PARAMETER MailSender
+        Mailbox UPN from which notification emails are sent (the 'From' address).
+
+    .PARAMETER MailClientId
+        Application (client) ID of the service principal used by Send-GraphMail.
+        This is a separate registration from the Graph read principal.
+
+    .PARAMETER MailTenantId
+        Entra tenant ID for the mail service principal.
+
+    .PARAMETER MailCertificateThumbprint
+        Thumbprint of the certificate used to authenticate the mail service principal.
 
     .PARAMETER WarnThreshold
         Minimum inactivity days to trigger a Warning notification. Default: 90.
@@ -82,9 +91,20 @@ function Invoke-AccountInactivityRemediation {
     .PARAMETER CertificateThumbprint
         (Certificate) Thumbprint of the certificate in the local certificate store.
 
+    .PARAMETER NotificationRecipientOverride
+        When set, all notifications are sent to this address instead of the resolved owner.
+        Owner resolution still runs and the real owner address is still recorded in
+        NotificationRecipient in the output for auditability. Use this during testing to
+        confirm mail delivery without notifying real account owners.
+
     .PARAMETER UseExistingGraphSession
         Skip Graph authentication. Use when the caller has already called Connect-MgGraph
         with the required permissions, or in tests where Graph is mocked.
+
+    .PARAMETER SkipModuleImport
+        Skip importing ActiveDirectory and Microsoft.Graph.* modules. Use when the caller
+        has already imported them earlier in the script, or in tests where those modules
+        are not installed and the cmdlets are mocked instead.
 
     .OUTPUTS
         [pscustomobject] with Summary, Results, Success, and Error fields.
@@ -92,12 +112,15 @@ function Invoke-AccountInactivityRemediation {
     .EXAMPLE
         # Certificate auth, discover and sweep all admin/priv accounts
         Invoke-AccountInactivityRemediation `
-            -Prefixes              @('admin','priv') `
-            -ADSearchBase          'OU=PrivilegedAccounts,DC=corp,DC=gov,DC=au' `
-            -Sender                'iam-automation@corp.local' `
-            -ClientId              $appId `
-            -TenantId              $tenantId `
-            -CertificateThumbprint $thumb `
+            -Prefixes                    @('admin','priv') `
+            -ADSearchBase                'OU=PrivilegedAccounts,DC=corp,DC=gov,DC=au' `
+            -MailSender                  'iam-automation@corp.local' `
+            -MailClientId                $mailAppId `
+            -MailTenantId                $tenantId `
+            -MailCertificateThumbprint   $mailThumb `
+            -ClientId                    $graphAppId `
+            -TenantId                    $tenantId `
+            -CertificateThumbprint       $graphThumb `
             -EnableDeletion
 
     #>
@@ -111,7 +134,16 @@ function Invoke-AccountInactivityRemediation {
         [string] $ADSearchBase,
 
         [Parameter(Mandatory)]
-        [string] $Sender,
+        [string] $MailSender,
+
+        [Parameter(Mandatory)]
+        [string] $MailClientId,
+
+        [Parameter(Mandatory)]
+        [string] $MailTenantId,
+
+        [Parameter(Mandatory)]
+        [string] $MailCertificateThumbprint,
 
         [Parameter()]
         [int] $WarnThreshold = 90,
@@ -133,6 +165,9 @@ function Invoke-AccountInactivityRemediation {
 
         [Parameter(ParameterSetName = 'Certificate', Mandatory)]
         [string] $CertificateThumbprint,
+
+        [Parameter()]
+        [string] $NotificationRecipientOverride,
 
         [Parameter(ParameterSetName = 'Default')]
         [switch] $UseExistingGraphSession,
@@ -223,7 +258,7 @@ function Invoke-AccountInactivityRemediation {
                         -NoWelcome -ErrorAction Stop
                 }
                 'Default' {
-                    Connect-MgGraph -Scopes 'User.Read.All', 'AuditLog.Read.All', 'Mail.Send' `
+                    Connect-MgGraph -Scopes 'User.Read.All', 'AuditLog.Read.All', 'User.ReadWrite.All' `
                         -NoWelcome -ErrorAction Stop
                 }
             }
@@ -287,7 +322,8 @@ function Invoke-AccountInactivityRemediation {
             $sam = $account.SamAccountName
 
             if (-not $upn) {
-                Write-Warning "Skipping account with no UPN (SAM: $sam)"
+                $resultList.Add((New-DirectResultEntry -SamAccountName $sam `
+                    -Status 'Skipped' -SkipReason 'NoUPN'))
                 continue
             }
 
@@ -349,9 +385,14 @@ function Invoke-AccountInactivityRemediation {
             #
             # If no strategy resolves a recipient, the account is skipped.
             # ----------------------------------------------------------
-            $upnLocalPart = if ($upn -match '^([^@]+)@') { $Matches[1] } else { $null }
+            # Use $sam for AD accounts (canonical value); fall back to UPN local part for
+            # Entra-native accounts where $sam is $null and the UPN local part is the only
+            # prefixed identifier available.
+            $ownerSam = if ($sam) { $sam } else {
+                if ($upn -match '^([^@]+)@') { $Matches[1] } else { $null }
+            }
 
-            $ownerResult = Get-ADAccountOwner -SamAccountName $upnLocalPart -ExtAttr14 $account.ExtensionAttribute14
+            $ownerResult = Get-ADAccountOwner -SamAccountName $ownerSam -ExtAttr14 $account.ExtensionAttribute14
 
             $notifyRecipient = $null
 
@@ -436,14 +477,18 @@ function Invoke-AccountInactivityRemediation {
                 -InactiveDays        $inactiveDays
 
             $notifySent = $false
+            $effectiveRecipient = if ($NotificationRecipientOverride) { $NotificationRecipientOverride } else { $notifyRecipient }
 
-            if ($PSCmdlet.ShouldProcess($notifyRecipient, "Send $notificationStage notification for $upn ($inactiveDays days inactive)")) {
+            if ($PSCmdlet.ShouldProcess($effectiveRecipient, "Send $notificationStage notification for $upn ($inactiveDays days inactive)")) {
                 Send-GraphMail `
-                    -Sender       $Sender `
-                    -ToRecipients @($notifyRecipient) `
-                    -Subject      $notifyContent.Subject `
-                    -Body         $notifyContent.Body `
-                    -ErrorAction  Stop
+                    -Sender                  $MailSender `
+                    -ClientID                $MailClientId `
+                    -Tenant                  $MailTenantId `
+                    -CertificateThumbprint   $MailCertificateThumbprint `
+                    -ToRecipients            @($effectiveRecipient) `
+                    -Subject                 $notifyContent.Subject `
+                    -Body                    $notifyContent.Body `
+                    -ErrorAction             Stop
 
                 $notifySent = $true
             }
@@ -512,10 +557,10 @@ function Invoke-AccountInactivityRemediation {
             NoOwner  = @($resultList | Where-Object { $_.SkipReason -eq 'NoOwnerFound' }).Count
         }
 
-        Write-Host ("Invoke-AccountInactivityRemediation complete: {0} warned, {1} disabled, {2} deleted, " +
-            "{3} skipped, {4} errors, {5} with no resolved owner.") -f `
+        Write-Host (("Invoke-AccountInactivityRemediation complete: {0} warned, {1} disabled, {2} deleted, " +
+            "{3} skipped, {4} errors, {5} with no resolved owner.") -f
             $summary.Warned, $summary.Disabled, $summary.Deleted,
-            $summary.Skipped, $summary.Errors, $summary.NoOwner
+            $summary.Skipped, $summary.Errors, $summary.NoOwner)
 
         $output.Summary = $summary
         $output.Results = $resultList.ToArray()

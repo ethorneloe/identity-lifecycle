@@ -17,11 +17,8 @@ function Remove-InactiveAccount {
             orchestrator records an error and does not write a Deletion state row.
             Replace the stub with your organisation's AD offboarding workflow.
 
-        This function does not update the state table. The orchestrator calls
-        Set-InactiveAccountStateRow with the Deletion stage after a confirmed deletion.
-
     .PARAMETER Account
-        A working set account object from Get-PrefixedAccounts.
+        A working set account object passed by the orchestrator.
 
     .OUTPUTS
         [pscustomobject] with fields:
@@ -30,9 +27,7 @@ function Remove-InactiveAccount {
 
     .EXAMPLE
         $result = Remove-InactiveAccount -Account $account
-        if ($result.Success) {
-            Set-InactiveAccountStateRow -Upn $account.UPN -Stage 'Deletion' ...
-        }
+        if (-not $result.Success) { Write-Warning $result.Message }
     #>
     [CmdletBinding(SupportsShouldProcess)]
     [OutputType([pscustomobject])]

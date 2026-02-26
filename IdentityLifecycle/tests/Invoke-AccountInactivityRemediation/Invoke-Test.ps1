@@ -82,19 +82,23 @@ Set-Mocks -MockContext $script:MockContext
 
 function Invoke-RemediationOnce {
     param(
-        [bool] $EnableDeletion          = $false,
-        [int]  $WarnThreshold           = 90,
-        [int]  $DisableThreshold        = 120,
-        [int]  $DeleteThreshold         = 180,
-        [bool] $UseExistingGraphSession = $true,
-        [bool] $WhatIf                  = $false
+        [bool]   $EnableDeletion          = $false,
+        [int]    $WarnThreshold           = 90,
+        [int]    $DisableThreshold        = 120,
+        [int]    $DeleteThreshold         = 180,
+        [bool]   $UseExistingGraphSession = $true,
+        [bool]   $WhatIf                  = $false,
+        [string] $NotificationRecipientOverride = ''
     )
 
     $params = @{
         Prefixes         = @('admin', 'priv')
         ADSearchBase     = 'OU=PrivilegedAccounts,DC=corp,DC=gov,DC=au'
-        Sender           = 'iam-automation@corp.local'
-        WarnThreshold    = $WarnThreshold
+        MailSender                = 'iam-automation@corp.local'
+        MailClientId              = 'mock-mail-client-id'
+        MailTenantId              = 'mock-mail-tenant-id'
+        MailCertificateThumbprint = 'mock-mail-cert-thumbprint'
+        WarnThreshold             = $WarnThreshold
         DisableThreshold = $DisableThreshold
         DeleteThreshold  = $DeleteThreshold
         SkipModuleImport = $true
@@ -104,8 +108,9 @@ function Invoke-RemediationOnce {
         WhatIf           = $WhatIf
     }
 
-    if ($UseExistingGraphSession) { $params['UseExistingGraphSession'] = $true }
-    if ($EnableDeletion)          { $params['EnableDeletion']          = $true }
+    if ($UseExistingGraphSession)        { $params['UseExistingGraphSession']        = $true }
+    if ($EnableDeletion)                 { $params['EnableDeletion']                 = $true }
+    if ($NotificationRecipientOverride)  { $params['NotificationRecipientOverride']  = $NotificationRecipientOverride }
 
     Invoke-AccountInactivityRemediation @params
 }
@@ -135,12 +140,13 @@ function Invoke-Scenario {
 
     $invokeParams = @{}
 
-    if ($Scenario.ContainsKey('EnableDeletion'))          { $invokeParams['EnableDeletion']          = $Scenario.EnableDeletion }
-    if ($Scenario.ContainsKey('WarnThreshold'))           { $invokeParams['WarnThreshold']           = $Scenario.WarnThreshold }
-    if ($Scenario.ContainsKey('DisableThreshold'))        { $invokeParams['DisableThreshold']        = $Scenario.DisableThreshold }
-    if ($Scenario.ContainsKey('DeleteThreshold'))         { $invokeParams['DeleteThreshold']         = $Scenario.DeleteThreshold }
-    if ($Scenario.ContainsKey('UseExistingGraphSession')) { $invokeParams['UseExistingGraphSession'] = $Scenario.UseExistingGraphSession }
-    if ($Scenario.ContainsKey('WhatIf'))                  { $invokeParams['WhatIf']                  = $Scenario.WhatIf }
+    if ($Scenario.ContainsKey('EnableDeletion'))                 { $invokeParams['EnableDeletion']                 = $Scenario.EnableDeletion }
+    if ($Scenario.ContainsKey('WarnThreshold'))                 { $invokeParams['WarnThreshold']                 = $Scenario.WarnThreshold }
+    if ($Scenario.ContainsKey('DisableThreshold'))              { $invokeParams['DisableThreshold']              = $Scenario.DisableThreshold }
+    if ($Scenario.ContainsKey('DeleteThreshold'))               { $invokeParams['DeleteThreshold']               = $Scenario.DeleteThreshold }
+    if ($Scenario.ContainsKey('UseExistingGraphSession'))       { $invokeParams['UseExistingGraphSession']       = $Scenario.UseExistingGraphSession }
+    if ($Scenario.ContainsKey('WhatIf'))                        { $invokeParams['WhatIf']                        = $Scenario.WhatIf }
+    if ($Scenario.ContainsKey('NotificationRecipientOverride')) { $invokeParams['NotificationRecipientOverride'] = $Scenario.NotificationRecipientOverride }
 
     $result = Invoke-RemediationOnce @invokeParams
     if ($Scenario.ContainsKey('AssertAfterRun')) {

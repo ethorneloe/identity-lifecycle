@@ -80,18 +80,21 @@ $Scenarios = @(
     ),
 
     # ------------------------------------------------------------------
-    # 01-04: Row with no UPN -- silently skipped (no result entry)
+    # 01-04: Row with no UPN -- recorded as Skipped/NoUPN
     # ------------------------------------------------------------------
     $(
         @{
-            Name    = '01-04: Input row with no UPN -- silently skipped'
+            Name    = '01-04: Input row with no UPN -- Skipped/NoUPN'
             Accounts = @(
                 [pscustomobject]@{ SamAccountName = 'admin.noupn'; UserPrincipalName = '' }
             )
             ADUsers = @{}
             AssertAfterRun = [scriptblock]::Create(@"
                 param(`$result, `$ctx)
-                Assert-SummaryField `$result.Summary 'Total' 0 'Total = 0 (no result entry for no-UPN row)'
+                Assert-SummaryField `$result.Summary 'Total'   1 'Total = 1'
+                Assert-SummaryField `$result.Summary 'Skipped' 1 'Skipped = 1'
+                Assert-Equal `$result.Results[0].SkipReason 'NoUPN' 'SkipReason = NoUPN'
+                Assert-Equal `$result.Results[0].SamAccountName 'admin.noupn' 'SAM recorded'
 "@)
         }
     ),

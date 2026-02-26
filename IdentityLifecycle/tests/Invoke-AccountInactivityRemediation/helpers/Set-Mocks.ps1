@@ -59,7 +59,7 @@ function Set-Mocks {
         }
 
         function script:Disconnect-MgGraph {
-            param([switch]$ErrorAction)
+            param([string]$ErrorAction)
         }
 
         # -------------------------------------------------------------------
@@ -146,6 +146,9 @@ function Set-Mocks {
         function script:Send-GraphMail {
             param(
                 [Alias('Sender')] $From,
+                $ClientID,
+                $Tenant,
+                $CertificateThumbprint,
                 $ToRecipients,
                 $Subject,
                 $Body,

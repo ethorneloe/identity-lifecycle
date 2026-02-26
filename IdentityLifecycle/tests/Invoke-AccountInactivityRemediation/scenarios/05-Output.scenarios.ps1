@@ -309,8 +309,11 @@ $Scenarios = @(
                 `$ctx.Actions     = [System.Collections.Generic.List[pscustomobject]]::new()
 
                 `$result2 = Invoke-AccountInactivityRemediationWithImport ``
-                    -Accounts          `$result1.Unprocessed ``
-                    -Sender            'iam-automation@corp.local' ``
+                    -Accounts                  `$result1.Unprocessed ``
+                    -MailSender                'iam-automation@corp.local' ``
+                    -MailClientId              'mock-mail-client-id' ``
+                    -MailTenantId              'mock-mail-tenant-id' ``
+                    -MailCertificateThumbprint 'mock-mail-cert-thumbprint' ``
                     -SkipModuleImport ``
                     -UseExistingGraphSession ``
                     -Confirm:`$false ``

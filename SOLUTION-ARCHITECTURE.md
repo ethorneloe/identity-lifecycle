@@ -60,25 +60,40 @@ The hybrid worker's identity (gMSA or service account) must have:
 | Delete objects | Target OU and below | `Remove-ADUser` (if AD deletion is enabled) |
 
 ### To Microsoft Graph
-A registered Entra application with a **certificate credential** (no client secret) is
-used for unattended authentication.
 
-Required Graph application permissions:
+Two separate Entra app registrations are used, each with a **certificate credential**
+(no client secret):
+
+**Graph read principal** — authenticates `Connect-MgGraph` for directory and sign-in
+data. Parameters: `-ClientId`, `-TenantId`, `-CertificateThumbprint`.
+
+Required permissions:
 
 | Permission | Type | Purpose |
 |---|---|---|
 | `User.Read.All` | Application | Read user objects, sign-in activity, and sponsor relationships |
 | `AuditLog.Read.All` | Application | Read `SignInActivity` (last sign-in timestamps) |
-| `Mail.Send` | Application | Send notification emails via `Send-GraphMail` |
 | `User.ReadWrite.All` | Application | Disable and delete Entra accounts |
+
+**Mail service principal** — used exclusively by `Send-GraphMail` for outbound
+notifications. Parameters: `-MailClientId`, `-MailTenantId`, `-MailCertificateThumbprint`.
+`Send-GraphMail` manages its own authentication internally using these credentials.
+
+Required permissions:
+
+| Permission | Type | Purpose |
+|---|---|---|
+| `Mail.Send` | Application | Send notification emails from the designated mailbox |
 
 ### Credential storage
 
 | Secret | Stored in | Retrieved by |
 |---|---|---|
-| Graph app certificate | Azure Key Vault | Automation runbook via managed identity |
-| Sender mailbox UPN | Automation variable or Key Vault | Runbook at runtime |
-| Tenant ID / Client ID | Automation variable (not secret) | Runbook at runtime |
+| Graph read app certificate | Azure Key Vault | Automation runbook via managed identity |
+| Mail service principal certificate | Azure Key Vault | Automation runbook via managed identity |
+| Mail sender mailbox UPN (`MailSender`) | Automation variable or Key Vault | Runbook at runtime |
+| Graph read tenant ID / client ID | Automation variable (not secret) | Runbook at runtime |
+| Mail tenant ID / client ID | Automation variable (not secret) | Runbook at runtime |
 
 ---
 
@@ -301,23 +316,26 @@ or service account UPN. Three templates exist, driven by `NotificationStage`:
 HTML templates are built by `New-InactiveAccountLifecycleMessage` and include the UPN,
 last activity date, and inactivity day count.
 
-**`Send-GraphMail` is not yet implemented.** It is mocked in the test suite and must
-be implemented before any sweep can send real notifications. Expected signature:
+**`Send-GraphMail` is not part of this module.** It is mocked in the test suite and must
+be supplied (e.g. from a shared utilities module) before any sweep can send real
+notifications. The orchestrators call it with these parameters:
 
 ```powershell
-function Send-GraphMail {
-    param(
-        [string]   $Sender,        # UPN of the sending mailbox
-        [string[]] $ToRecipients,  # Recipient email addresses
-        [string]   $Subject,
-        [string]   $Body,          # HTML string
-        [string]   $BodyType = 'HTML'
-    )
-}
+Send-GraphMail `
+    -Sender                'iam-automation@corp.local' `  # MailSender param value
+    -ClientID              $MailClientId `
+    -Tenant                $MailTenantId `
+    -CertificateThumbprint $MailCertificateThumbprint `
+    -ToRecipients          @('owner@corp.local') `
+    -Subject               'Subject -- account@corp.local' `
+    -Body                  '<html>...</html>' `
+    -BodyType              'HTML' `
+    -ErrorAction           Stop
 ```
 
-Uses `Send-MgUserMail`. The connected app identity requires `Mail.Send` application
-permission scoped to the sender mailbox (or tenant-wide if not restricted).
+`Send-GraphMail` is expected to manage its own Graph authentication internally using
+the supplied mail SP credentials. The mail SP requires `Mail.Send` application permission.
+This is separate from the `Connect-MgGraph` session used for directory reads.
 
 ---
 
@@ -335,7 +353,7 @@ the run succeeded or failed:
     Warned   : int
     Disabled : int
     Deleted  : int
-    Skipped  : int    -- ActivityDetected + DisabledSinceExport + NoOwnerFound
+    Skipped  : int    -- NoUPN + ActivityDetected + DisabledSinceExport + NoOwnerFound
     Errors   : int    -- accounts where at least one step failed
     NoOwner  : int    -- subset of Skipped with SkipReason = NoOwnerFound
   }
@@ -349,7 +367,7 @@ the run succeeded or failed:
       NotificationSent      : bool
       NotificationRecipient : string
       Status                : string   -- Completed | Skipped | Error
-      SkipReason            : string   -- ActivityDetected | DisabledSinceExport | NoOwnerFound | NoEmailFound | null
+      SkipReason            : string   -- NoUPN | ActivityDetected | DisabledSinceExport | NoOwnerFound | NoEmailFound | null
       Error                 : string
       Timestamp             : string   -- ISO 8601 UTC
     }
@@ -370,7 +388,7 @@ the run succeeded or failed:
 ```
 
 **`Unprocessed` contains accounts that errored or were never reached** — the accounts
-you need to retry. Accounts skipped with `ActivityDetected`, `DisabledSinceExport`, or
+you need to retry. Accounts skipped with `NoUPN`, `ActivityDetected`, `DisabledSinceExport`, or
 `NoOwnerFound` are deliberate decisions and are not included.
 
 The shape of each `Unprocessed` entry exactly matches the input contract of
@@ -379,7 +397,7 @@ passed directly as `-Accounts` with no transformation:
 
 ```powershell
 $result2 = Invoke-AccountInactivityRemediationWithImport `
-    -Accounts $result.Unprocessed -Sender 'iam@corp.local' ...
+    -Accounts $result.Unprocessed -MailSender 'iam@corp.local' ...
 ```
 
 Summary, Results, and Unprocessed are all built in a `finally` block so **partial
