@@ -21,7 +21,7 @@ configurable inactivity thresholds.
 │  │  Runbook (PowerShell)                                                │  │
 │  │  · Retrieves credentials from Key Vault                              │  │
 │  │  · Imports IdentityLifecycle module                                  │  │
-│  │  · Calls orchestrator function                                       │  │
+│  │  · Calls Invoke-InactiveAccountRemediation                           │  │
 │  │  · Writes result to Log Analytics / Storage                          │  │
 │  └──────────────────────────────────────────────────────────────────────┘  │
 │            │                                                                │
@@ -106,8 +106,7 @@ Required permissions:
 └── functions/
     └── public/
         ├── InactiveAccounts/
-        │   ├── Invoke-AccountInactivityRemediationWithImport.ps1  Stateless orchestrator (export-driven)
-        │   ├── Invoke-AccountInactivityRemediation.ps1            Stateless orchestrator (auto-discovery)
+        │   ├── Invoke-InactiveAccountRemediation.ps1   Orchestrator (import + discovery modes)
         │   ├── Disable-InactiveAccount.ps1             Disable in AD or Entra
         │   ├── Remove-InactiveAccount.ps1              Delete from Entra (AD stub pending)
         │   └── New-InactiveAccountLifecycleMessage.ps1 HTML email builder
@@ -120,18 +119,21 @@ Required permissions:
 
 ---
 
-## Two Orchestration Patterns
+## Two Orchestration Modes
 
-The module provides two stateless orchestration patterns. They share the same action
-functions (`Disable-InactiveAccount`, `Remove-InactiveAccount`, `Send-GraphMail`) but
-differ in how they source the account list.
+`Invoke-InactiveAccountRemediation` is the single orchestrator. The parameter set
+determines how accounts are sourced. Both modes share the same action functions,
+threshold model, owner resolution logic, and output contract.
 
-### 1. Import-driven sweep (`Invoke-AccountInactivityRemediationWithImport`)
+### Import mode (`-Accounts -Prefixes`)
 
 ```
 Azure Automation (schedule: monthly, or triggered manually)
   │
   ├─ Input: CSV export from SIEM / IGA dashboard (pre-identified inactive privileged accounts)
+  │         or $result.Unprocessed from a previous run
+  │
+  ├─ Prefix filter: rows whose SAM/UPN does not match any -Prefixes value are discarded
   │
   └─ foreach account:
        Get-ADUser / Get-MgUser      Live check: current enabled state + latest logon
@@ -154,7 +156,7 @@ detected and skipped at the live check.
 
 ---
 
-### 2. Discovery sweep (`Invoke-AccountInactivityRemediation`)
+### Discovery mode (`-Prefixes -ADSearchBase`)
 
 ```
 Azure Automation (schedule: weekly/monthly, or triggered ad-hoc)
@@ -165,28 +167,30 @@ Azure Automation (schedule: weekly/monthly, or triggered ad-hoc)
   │                                 cloud-native Entra accounts added separately
   │
   └─ foreach account:
-       Threshold evaluation         Same as import-driven (90/120/180 defaults)
-       Get-ADAccountOwner           Owner resolution: UPN local-part → prefix-strip → EA14
+       Threshold evaluation         Same as import mode (90/120/180 defaults)
+       Get-ADAccountOwner           Owner resolution: SamAccountName → prefix-strip → EA14
        Get-MgUserSponsor            Fallback if AD strategies fail (requires EntraObjectId)
        Send-GraphMail               Notify owner
        Disable-InactiveAccount      If action = Disable
        Remove-InactiveAccount       If action = Delete and -EnableDeletion set
 ```
 
-**When to use:** When you want the module to do its own discovery from the live directory
-without a pre-exported list. No dependency on an external SIEM or dashboard export.
+**When to use:** When you want the module to own discovery end-to-end with no external
+export dependency. No dependency on an external SIEM or dashboard export.
 
-**State:** None. Re-runnable. The `Unprocessed` field in the output allows targeted retry
-via `Invoke-AccountInactivityRemediationWithImport` if a run fails mid-batch.
+**State:** None. Re-runnable. The `Unprocessed` field in the output is already shaped
+as the import contract, so `$result.Unprocessed` feeds directly into import mode for
+a targeted retry if a run fails mid-batch.
 
 ---
 
-## Approach Comparison: Which Function to Use
+## Approach Comparison: Which Mode to Use
 
-| | Import-driven sweep | Discovery sweep |
+| | Import mode | Discovery mode |
 |---|---|---|
-| **Function** | `Invoke-AccountInactivityRemediationWithImport` | `Invoke-AccountInactivityRemediation` |
-| **Account source** | Pre-exported CSV from SIEM / IGA | Live AD + Entra (auto-discovered by prefix) |
+| **Parameter set** | `-Accounts -Prefixes` | `-Prefixes -ADSearchBase` |
+| **Account source** | Pre-exported list from SIEM / IGA | Live AD + Entra (auto-discovered by prefix) |
+| **Prefix role** | Filter: discard rows not matching a prefix | Scope: query only accounts with matching prefix |
 | **State** | None | None |
 | **Threshold model** | Absolute inactivity duration (single pass) | Absolute inactivity duration (single pass) |
 | **Action per run** | Highest-severity action that applies | Highest-severity action that applies |
@@ -196,7 +200,7 @@ via `Invoke-AccountInactivityRemediationWithImport` if a run fails mid-batch.
 
 ### When to choose each
 
-**Import-driven sweep** — choose this when:
+**Import mode** — choose this when:
 
 - You already have a SIEM or IGA tool that produces a curated list of inactive accounts
   (e.g. a monthly compliance report).
@@ -205,7 +209,7 @@ via `Invoke-AccountInactivityRemediationWithImport` if a run fails mid-batch.
 - Drawback: depends on the quality of the upstream export. Stale exports produce stale
   input; the live check guards against this but cannot compensate for a very old export.
 
-**Discovery sweep** — choose this when:
+**Discovery mode** — choose this when:
 
 - You want the module to own discovery end-to-end with no external export dependency.
 - You prefer a fully automated, scheduled sweep that requires no manual input between
@@ -215,19 +219,20 @@ via `Invoke-AccountInactivityRemediationWithImport` if a run fails mid-batch.
   warned and then goes inactive again, it will be warned again on a future run — there
   is no memory of prior notifications.
 
-### Combining approaches
+### Combining modes
 
 These are not mutually exclusive. A common operational pattern:
 
-1. Run `Invoke-AccountInactivityRemediation` monthly to handle the broad population
-   automatically (Warning and Disable).
+1. Run discovery mode monthly to handle the broad population automatically (Warning and Disable).
 2. Before enabling deletion, review the `Results` output, extract the accounts at
-   the delete threshold, and pass that reviewed list to `Remove-InactiveAccounts`
-   as a deliberate ad-hoc action — adding a human review gate before the irreversible step.
+   the delete threshold, and pass that reviewed list back in as import mode with
+   `-EnableDeletion` — adding a human review gate before the irreversible step.
+3. If a discovery run fails mid-batch, pass `$result.Unprocessed` into import mode
+   for a targeted retry. No transformation needed — both modes share the same field names.
 
 ---
 
-## Data Flow: Import-Driven Sweep End-to-End
+## Data Flow: Import Mode End-to-End
 
 ```
 SIEM / IGA Dashboard
@@ -243,8 +248,9 @@ Hybrid Runbook Worker                                                  │
         ├─ Import-Module IdentityLifecycle                             │
         ├─ Connect-MgGraph (certificate from Key Vault)                │
         │                                                              │
-        ├─ Invoke-AccountInactivityRemediationWithImport               │
+        ├─ Invoke-InactiveAccountRemediation -Accounts -Prefixes       │
         │     │                                                        │
+        │     ├─ Prefix filter (discard non-matching rows)             │
         │     ├─ Get-ADUser (per account)          ◄── AD domain       │
         │     ├─ Get-MgUser (per account)          ◄── Graph API       │
         │     ├─ Get-ADUser (owner lookup)         ◄── AD domain       │
@@ -262,6 +268,24 @@ Hybrid Runbook Worker                                                  │
 
 ---
 
+## Canonical Field Names
+
+All layers — discovery functions, working list, input contract, and `Unprocessed` output
+— use the same field names. No translation is needed when crossing mode boundaries:
+
+| Field | Source | Notes |
+|---|---|---|
+| `UserPrincipalName` | Primary key | Rows with no value are discarded (NoUPN) |
+| `SamAccountName` | AD accounts | Empty string for Entra-native accounts |
+| `Enabled` | AD/Entra enabled state | String `"True"`/`"False"` in CSV; bool in live objects |
+| `LastLogonDate` | AD last logon | `$null` if never logged on |
+| `entraLastSignInAEST` | Entra sign-in | `$null` if never signed in or no Entra account |
+| `Created` | Account creation date | Last-resort inactivity baseline |
+| `EntraObjectId` | Entra object ID | Required for Entra-native; optional for AD+Entra |
+| `Description` | AD/Entra description | Passed to action functions |
+
+---
+
 ## Owner Resolution
 
 Before any notification or action is taken, the module must identify who owns the
@@ -270,7 +294,7 @@ recipient wins:
 
 ```
 1. Prefix strip (primary — naming convention is the authoritative ownership contract)
-   admin.jsmith → strip 'admin.' → candidate SAM = 'jsmith'
+   admin.jsmith → strip 'admin' prefix → candidate SAM = 'jsmith'
    Verify 'jsmith' exists in AD → owner confirmed
    Owner email: Get-ADUser -Properties EmailAddress
 
@@ -318,7 +342,7 @@ last activity date, and inactivity day count.
 
 **`Send-GraphMail` is not part of this module.** It is mocked in the test suite and must
 be supplied (e.g. from a shared utilities module) before any sweep can send real
-notifications. The orchestrators call it with these parameters:
+notifications. The orchestrator calls it with these parameters:
 
 ```powershell
 Send-GraphMail `
@@ -341,8 +365,8 @@ This is separate from the `Connect-MgGraph` session used for directory reads.
 
 ## Output
 
-Both orchestrators return a consistent `[pscustomobject]` regardless of whether
-the run succeeded or failed:
+`Invoke-InactiveAccountRemediation` returns a consistent `[pscustomobject]` regardless
+of whether the run succeeded or failed:
 
 ```
 {
@@ -370,6 +394,7 @@ the run succeeded or failed:
       SkipReason            : string   -- NoUPN | ActivityDetected | DisabledSinceExport | NoOwnerFound | NoEmailFound | null
       Error                 : string
       Timestamp             : string   -- ISO 8601 UTC
+      InputRow              : object   -- set only when owner is confirmed; used internally for Unprocessed
     }
   ]
   Unprocessed  : [        -- accounts that can be retried on next run
@@ -387,17 +412,23 @@ the run succeeded or failed:
 }
 ```
 
-**`Unprocessed` contains accounts that errored or were never reached** — the accounts
-you need to retry. Accounts skipped with `NoUPN`, `ActivityDetected`, `DisabledSinceExport`, or
-`NoOwnerFound` are deliberate decisions and are not included.
+**`Unprocessed` contains accounts where the owner was confirmed but something downstream
+failed** — mail error, action error, or a mid-batch abort after owner resolution. These
+are the accounts worth automated retry.
 
-The shape of each `Unprocessed` entry exactly matches the input contract of
-`Invoke-AccountInactivityRemediationWithImport`, so `$result.Unprocessed` can be
-passed directly as `-Accounts` with no transformation:
+Accounts skipped with `NoUPN`, `ActivityDetected`, `DisabledSinceExport`, or
+`NoOwnerFound` are deliberate decisions and are **not** in `Unprocessed`. Early-exit
+failures before owner resolution (no SAM + no EntraObjectId, AD lookup error) are also
+excluded — these require human investigation.
+
+The shape of each `Unprocessed` entry exactly matches the import contract of
+`Invoke-InactiveAccountRemediation -Accounts`, so `$result.Unprocessed` can be
+passed directly as `-Accounts` with no transformation, regardless of which mode
+produced the original run:
 
 ```powershell
-$result2 = Invoke-AccountInactivityRemediationWithImport `
-    -Accounts $result.Unprocessed -MailSender 'iam@corp.local' ...
+$result2 = Invoke-InactiveAccountRemediation `
+    -Accounts $result.Unprocessed -Prefixes @('admin','priv') -MailSender 'iam@corp.local' ...
 ```
 
 Summary, Results, and Unprocessed are all built in a `finally` block so **partial

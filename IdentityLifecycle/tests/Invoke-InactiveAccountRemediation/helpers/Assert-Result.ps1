@@ -3,6 +3,7 @@ function script:Add-AssertionResult {
     $detail = if (-not $Pass) { "Expected '$Expected' but got '$Actual'" } else { '' }
     $script:AssertionResults.Add([pscustomobject]@{
         Scenario  = $Scenario
+        Why       = $script:CurrentWhy
         Run       = $Run
         Assertion = $Assertion
         Expected  = $Expected
@@ -95,16 +96,6 @@ function Assert-Count {
 }
 
 function Assert-ActionFired {
-    <#
-    .SYNOPSIS
-        Asserts that a specific action was recorded in MockContext.Actions.
-
-    .PARAMETER Action
-        One of: Notify, Disable, Remove.
-
-    .PARAMETER UPN
-        The UPN the action should have targeted.
-    #>
     param(
         [string] $Action,
         [string] $UPN,
@@ -112,11 +103,7 @@ function Assert-ActionFired {
         [string] $Scenario = $script:CurrentScenario,
         [int]    $Run      = $script:CurrentRun
     )
-
-    $found = @($script:MockContext.Actions | Where-Object {
-        $_.Action -eq $Action -and $_.UPN -eq $UPN
-    })
-
+    $found  = @($script:MockContext.Actions | Where-Object { $_.Action -eq $Action -and $_.UPN -eq $UPN })
     $pass   = ($found.Count -gt 0)
     $detail = "$Action on $UPN"
     $actual = if ($pass) { $detail } else { 'not fired' }
@@ -124,46 +111,22 @@ function Assert-ActionFired {
 }
 
 function Assert-ActionNotFired {
-    <#
-    .SYNOPSIS
-        Asserts that a specific action was NOT recorded in MockContext.Actions.
-    #>
     param(
         [string] $Action,
-        $UPN               = $null,
+        $UPN     = $null,
         [string] $Message,
         [string] $Scenario = $script:CurrentScenario,
         [int]    $Run      = $script:CurrentRun
     )
-
-    $found = @($script:MockContext.Actions | Where-Object {
-        $_.Action -eq $Action -and (
-            $null -eq $UPN -or $_.UPN -eq $UPN
-        )
+    $found  = @($script:MockContext.Actions | Where-Object {
+        $_.Action -eq $Action -and ($null -eq $UPN -or $_.UPN -eq $UPN)
     })
-
     $pass   = ($found.Count -eq 0)
     $actual = if ($pass) { 'not fired' } else { "fired $($found.Count) time(s)" }
     Add-AssertionResult -Scenario $Scenario -Run $Run -Assertion $Message -Expected 'not fired' -Actual $actual -Pass $pass
 }
 
 function Assert-ResultField {
-    <#
-    .SYNOPSIS
-        Asserts a field value on a specific UPN's result entry.
-
-    .PARAMETER Results
-        The Results array returned by Invoke-AccountInactivityRemediationWithImport.
-
-    .PARAMETER UPN
-        UPN to locate in Results.
-
-    .PARAMETER Field
-        Field name on the result entry.
-
-    .PARAMETER Expected
-        Expected value.
-    #>
     param(
         $Results,
         [string] $UPN,
@@ -180,10 +143,6 @@ function Assert-ResultField {
 }
 
 function Assert-SummaryField {
-    <#
-    .SYNOPSIS
-        Asserts a field on the Summary object returned by Invoke-AccountInactivityRemediationWithImport.
-    #>
     param(
         $Summary,
         [string] $Field,

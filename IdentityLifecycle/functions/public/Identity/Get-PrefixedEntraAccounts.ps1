@@ -21,8 +21,8 @@ function Get-PrefixedEntraAccounts {
         One or more UPN prefixes, e.g. @('admin','priv').
 
     .OUTPUTS
-        [pscustomobject] with fields: EntraObjectId, UPN, AccountEnabled,
-        OnPremisesSyncEnabled, LastSignInEntra, Created.
+        [pscustomobject] with fields: EntraObjectId, UserPrincipalName, Enabled,
+        OnPremisesSyncEnabled, entraLastSignInAEST, Created.
 
     .EXAMPLE
         $entraAccounts = Get-PrefixedEntraAccounts -Prefixes @('admin','priv')
@@ -54,12 +54,12 @@ function Get-PrefixedEntraAccounts {
 
     foreach ($user in $entraById.Values) {
         [pscustomobject]@{
-            EntraObjectId          = $user.Id
-            UPN                    = $user.UserPrincipalName
-            AccountEnabled         = $user.AccountEnabled
-            OnPremisesSyncEnabled  = [bool]$user.OnPremisesSyncEnabled
-            LastSignInEntra        = Resolve-EntraSignIn $user
-            Created                = $user.CreatedDateTime
+            EntraObjectId         = $user.Id
+            UserPrincipalName     = $user.UserPrincipalName
+            Enabled               = $user.AccountEnabled
+            OnPremisesSyncEnabled = [bool]$user.OnPremisesSyncEnabled
+            entraLastSignInAEST   = Resolve-EntraSignIn $user
+            Created               = $user.CreatedDateTime
         }
     }
 }

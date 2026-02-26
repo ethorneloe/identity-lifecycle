@@ -1,11 +1,9 @@
 <#
 .SYNOPSIS
-    Runs both test suites.
+    Runs the test suite.
 
 .DESCRIPTION
-    Runs the test harnesses for both orchestrator functions:
-        - Invoke-AccountInactivityRemediationWithImport
-        - Invoke-AccountInactivityRemediation
+    Runs the test harness for Invoke-InactiveAccountRemediation (merged orchestrator).
 
     Run this from the repo root.
 
@@ -16,8 +14,7 @@
 $ErrorActionPreference = 'Stop'
 
 $suites = @(
-    'IdentityLifecycle\tests\Invoke-AccountInactivityRemediationWithImport\Invoke-Test.ps1'
-    'IdentityLifecycle\tests\Invoke-AccountInactivityRemediation\Invoke-Test.ps1'
+    'IdentityLifecycle\tests\Invoke-InactiveAccountRemediation\Invoke-Test.ps1'
 )
 
 foreach ($suite in $suites) {

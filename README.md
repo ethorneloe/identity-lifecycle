@@ -19,17 +19,19 @@ Deletion is an explicit opt-in. Accounts that reach the delete threshold are hel
 
 ---
 
-## Two sweep modes
+## One function, two modes
 
-### Import-driven sweep — `Invoke-AccountInactivityRemediationWithImport`
+`Invoke-InactiveAccountRemediation` is the single entry point. The parameter set determines how accounts are sourced:
 
-Takes a pre-identified list of accounts (from a SIEM/IGA export) and evaluates each one in a single pass. A live directory re-query confirms current activity and enabled state before any action is taken. No persistent state is maintained.
+### Import mode (`-Accounts -Prefixes`)
 
-If the job fails partway through, the output object's `Unprocessed` field contains every account that was not successfully resolved. Pass `$result.Unprocessed` directly as `-Accounts` on the next run — only the outstanding accounts are retried, preventing double-notification on accounts that already completed.
+Takes a pre-identified list of accounts (from a SIEM/IGA export or the `Unprocessed` output of a previous run) and evaluates each one in a single pass. A live directory re-query confirms current activity and enabled state before any action is taken. The `-Prefixes` filter guards against mis-routed inputs by silently discarding any row whose SAM or UPN does not start with a recognised prefix.
 
-### Discovery sweep — `Invoke-AccountInactivityRemediation`
+If the job fails partway through, `$result.Unprocessed` contains every account where the owner was confirmed but something downstream failed (mail error, action error). Pass `$result.Unprocessed` directly as `-Accounts` on the next run — only those accounts are retried.
 
-Discovers accounts in real time by querying AD and Entra ID directly using the configured prefixes. No input list is required. It applies the same absolute threshold model and its output carries the same `Unprocessed` field — so if a run fails mid-batch, `$result.Unprocessed` is already shaped to feed directly into `Invoke-AccountInactivityRemediationWithImport` for a targeted retry.
+### Discovery mode (`-Prefixes -ADSearchBase`)
+
+Discovers accounts in real time by querying AD and Entra ID using the configured prefixes. No input list is required. It applies the same threshold model and produces the same output shape — `$result.Unprocessed` is already shaped to feed directly back into import mode for a targeted retry.
 
 ---
 
@@ -37,15 +39,11 @@ Discovers accounts in real time by querying AD and Entra ID directly using the c
 
 ```
 functions/public/
-  InactiveAccounts/    # Orchestrators and action functions
+  InactiveAccounts/    # Orchestrator and action functions
   Identity/            # Account collection from AD and Entra ID; owner resolution
 tests/
-  Invoke-AccountInactivityRemediationWithImport/
-    Invoke-Test.ps1    # Import-driven sweep test harness
-    README.md          # Test coverage documentation
-  Invoke-AccountInactivityRemediation/
-    Invoke-Test.ps1    # Discovery sweep test harness
-    README.md          # Test coverage documentation
+  Invoke-InactiveAccountRemediation/
+    Invoke-Test.ps1    # Merged test harness (import + discovery modes)
 ```
 
 ---
@@ -59,7 +57,7 @@ tests/
 
 ---
 
-## Input format (import-driven sweep)
+## Input format (import mode)
 
 Pass an array of objects via `-Accounts`. The expected fields match a standard dashboard export:
 
@@ -82,11 +80,12 @@ Routing is determined by field presence, not by `Source` or `OnPremisesSyncEnabl
 
 ## Parameters
 
-### Import-driven sweep
+### Import mode
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `-Accounts` | object[] | Mandatory | Input account rows |
+| `-Prefixes` | string[] | Mandatory | SAM/UPN prefixes to accept, e.g. `@('admin','priv')`; rows not matching any prefix are silently discarded |
 | `-MailSender` | string | Mandatory | Mailbox UPN used as the From address for notification emails |
 | `-MailClientId` | string | Mandatory | Application (client) ID of the mail service principal |
 | `-MailTenantId` | string | Mandatory | Entra tenant ID for the mail service principal |
@@ -102,20 +101,22 @@ Routing is determined by field presence, not by `Source` or `OnPremisesSyncEnabl
 | `-UseExistingGraphSession` | switch | Off | Skip Graph connect/disconnect |
 | `-WhatIf` | switch | — | Preview actions without executing them |
 
-### Discovery sweep
+### Discovery mode
 
-Same parameters as the import-driven sweep, plus:
+Same parameters as import mode, except `-Accounts` is replaced with `-ADSearchBase`:
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `-Prefixes` | string[] | Mandatory | SAM/UPN prefixes to target, e.g. `@('admin','priv')` |
 | `-ADSearchBase` | string | Mandatory | Distinguished name of the OU to scope AD discovery |
 
+All other parameters are the same as import mode.
+
 ---
 
 ## Output object
 
-Both functions always return a `[pscustomobject]` — they never throw. Partial results are preserved via the `finally` block even on mid-batch failure.
+`Invoke-InactiveAccountRemediation` always returns a `[pscustomobject]` — it never throws. Partial results are preserved via the `finally` block even on mid-batch failure.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -123,7 +124,7 @@ Both functions always return a `[pscustomobject]` — they never throw. Partial 
 | `Error` | string | Set on fatal errors (connect failure, module import failure, Send-GraphMail throw) |
 | `Summary` | pscustomobject | Null on fatal errors; see below |
 | `Results` | pscustomobject[] | Empty on fatal errors; one entry per processed account |
-| `Unprocessed` | pscustomobject[] | Accounts that errored or were never reached; shaped as import contract; empty when all accounts resolved |
+| `Unprocessed` | pscustomobject[] | Accounts where the owner was confirmed but something downstream failed; shaped as import contract; empty when all accounts resolved |
 
 ### Summary fields
 
@@ -147,7 +148,7 @@ Both functions always return a `[pscustomobject]` — they never throw. Partial 
 | `ActionTaken` | string | `None`, `Notify`, `Disable`, `Delete` |
 | `NotificationStage` | string | `Warning`, `Disabled`, `Deletion`, or null |
 | `NotificationSent` | bool | |
-| `NotificationRecipient` | string | Address the real owner's email resolves to; this is always the owner's address regardless of any `NotificationRecipientOverride` |
+| `NotificationRecipient` | string | Resolved owner address (always the real owner, regardless of any override) |
 | `Status` | string | `Completed`, `Skipped`, or `Error` |
 | `SkipReason` | string | `NoUPN`, `ActivityDetected`, `DisabledSinceExport`, `NoOwnerFound`, `NoEmailFound`, or null |
 | `Error` | string | Error detail if any step failed; null otherwise |
@@ -155,9 +156,9 @@ Both functions always return a `[pscustomobject]` — they never throw. Partial 
 
 ### Unprocessed entries
 
-`Unprocessed` contains one entry per account with `Status = Error` or accounts never reached due to a fatal mid-batch abort. Each entry uses the same 8-field shape as the import contract (`UserPrincipalName`, `SamAccountName`, `Enabled`, `LastLogonDate`, `Created`, `EntraObjectId`, `entraLastSignInAEST`, `Description`), so it can be passed directly as `-Accounts` on the next run with no transformation.
+`Unprocessed` contains one entry per account where the owner was confirmed and a valid notification recipient resolved, but something downstream then failed (mail error, action error, or a mid-batch abort). Each entry uses the same 8-field shape as the import contract, so it can be passed directly as `-Accounts` on the next run with no transformation.
 
-Accounts with `Status = Skipped` are **not** in `Unprocessed` — they were deliberate decisions, not failures.
+Accounts with `Status = Skipped` are **not** in `Unprocessed` — they were deliberate decisions (`NoUPN`, `ActivityDetected`, `DisabledSinceExport`, `NoOwnerFound`), not mechanical failures. Early-exit failures before owner resolution (no SAM + no EntraObjectId, AD lookup error) are also excluded — these require human investigation rather than automated retry.
 
 ---
 
@@ -172,8 +173,9 @@ Accounts with `Status = Skipped` are **not** in `Unprocessed` — they were deli
    b. Entra path (no SAM):
       - Get-MgUser → live AccountEnabled, SignInActivity
    c. If live Enabled = false and export said enabled → Skipped/DisabledSinceExport
+   [Discovery mode: live check is skipped — data already comes from the live directory]
 3. Compute InactiveDays
-   - Use live logon/sign-in; last resort: WhenCreated from input row
+   - Use live logon/sign-in; last resort: Created from input row
    - If no date at all → Error
    - If InactiveDays < WarnThreshold → Skipped/ActivityDetected
 4. Owner resolution (first strategy that yields a recipient wins)
@@ -191,21 +193,22 @@ Accounts with `Status = Skipped` are **not** in `Unprocessed` — they were deli
 9. Result entry written
 ```
 
-In `finally`: Summary tallied; `Unprocessed` computed by diffing the input against accounts with `Status = Completed` or `Status = Skipped`.
+In `finally`: Summary tallied; `Unprocessed` filtered from result entries that carry an `InputRow` (set only after owner resolution succeeds and a valid recipient is confirmed).
 
 ---
 
 ## Quick start
 
-### Import-driven sweep
+### Import mode
 
 ```powershell
 Import-Module .\IdentityLifecycle
 
 $accounts = Import-Csv 'C:\Reports\InactivePrivAccounts.csv'
 
-$result = Invoke-AccountInactivityRemediationWithImport `
+$result = Invoke-InactiveAccountRemediation `
     -Accounts                  $accounts `
+    -Prefixes                  @('admin', 'priv') `
     -MailSender                'iam-automation@corp.local' `
     -MailClientId              $mailAppId `
     -MailTenantId              $tenantId `
@@ -218,10 +221,11 @@ $result = Invoke-AccountInactivityRemediationWithImport `
 $result.Summary
 $result.Results | Where-Object { $_.Status -eq 'Error' } | Select-Object UPN, Error
 
-# Re-run for any accounts that failed or were not reached
+# Re-run for any accounts where owner was confirmed but something downstream failed
 if ($result.Unprocessed) {
-    $retry = Invoke-AccountInactivityRemediationWithImport `
+    $retry = Invoke-InactiveAccountRemediation `
         -Accounts                  $result.Unprocessed `
+        -Prefixes                  @('admin', 'priv') `
         -MailSender                'iam-automation@corp.local' `
         -MailClientId              $mailAppId `
         -MailTenantId              $tenantId `
@@ -233,12 +237,12 @@ if ($result.Unprocessed) {
 }
 ```
 
-### Discovery sweep
+### Discovery mode
 
 ```powershell
 Import-Module .\IdentityLifecycle
 
-$result = Invoke-AccountInactivityRemediation `
+$result = Invoke-InactiveAccountRemediation `
     -Prefixes                  @('admin', 'priv') `
     -ADSearchBase              'OU=PrivilegedAccounts,DC=corp,DC=local' `
     -MailSender                'iam-automation@corp.local' `
@@ -253,10 +257,11 @@ $result = Invoke-AccountInactivityRemediation `
 $result.Summary
 $result.Results | Where-Object { $_.Status -eq 'Error' } | Select-Object UPN, Error
 
-# Re-run failures via the import-driven sweep (Unprocessed is already import-contract shaped)
+# Re-run failures in import mode (Unprocessed is already import-contract shaped)
 if ($result.Unprocessed) {
-    $retry = Invoke-AccountInactivityRemediationWithImport `
+    $retry = Invoke-InactiveAccountRemediation `
         -Accounts                  $result.Unprocessed `
+        -Prefixes                  @('admin', 'priv') `
         -MailSender                'iam-automation@corp.local' `
         -MailClientId              $mailAppId `
         -MailTenantId              $tenantId `
@@ -270,11 +275,11 @@ if ($result.Unprocessed) {
 
 ### Dry run / WhatIf
 
-Both functions support `-WhatIf`. Passing it suppresses all side effects (no emails sent, no accounts disabled or deleted) while still running the full live check and threshold evaluation and returning a complete result object:
+`-WhatIf` suppresses all side effects (no emails sent, no accounts disabled or deleted) while still running the full live check and threshold evaluation and returning a complete result object:
 
 ```powershell
-$result = Invoke-AccountInactivityRemediationWithImport `
-    -Accounts $accounts `
+$result = Invoke-InactiveAccountRemediation `
+    -Accounts $accounts -Prefixes @('admin', 'priv') `
     -MailSender 'iam@corp.local' -MailClientId $mailAppId -MailTenantId $tenantId -MailCertificateThumbprint $mailThumb `
     -UseExistingGraphSession -WhatIf
 
@@ -285,13 +290,13 @@ $result.Results | Format-Table UPN, InactiveDays, ActionTaken, NotificationStage
 
 ## Operational modes
 
-The same import-driven function handles all patterns below by varying the input and parameters.
+The same function handles all patterns below by varying the input and parameters.
 
 ### Mode 1 — Full single pass (warn + disable + delete in one run)
 
 ```powershell
-$result = Invoke-AccountInactivityRemediationWithImport `
-    -Accounts $accounts `
+$result = Invoke-InactiveAccountRemediation `
+    -Accounts $accounts -Prefixes @('admin', 'priv') `
     -MailSender 'iam-automation@corp.local' -MailClientId $mailAppId -MailTenantId $tenantId -MailCertificateThumbprint $mailThumb `
     -ClientId $graphAppId -TenantId $tenantId -CertificateThumbprint $graphThumb `
     -EnableDeletion
@@ -308,8 +313,8 @@ Omit `-EnableDeletion`. Accounts at the delete threshold receive a Deletion noti
 ```powershell
 $disabledOld = Import-Csv 'C:\Reports\DisabledPrivAccounts-180plus.csv'
 
-$result = Invoke-AccountInactivityRemediationWithImport `
-    -Accounts $disabledOld `
+$result = Invoke-InactiveAccountRemediation `
+    -Accounts $disabledOld -Prefixes @('admin', 'priv') `
     -MailSender 'iam-automation@corp.local' -MailClientId $mailAppId -MailTenantId $tenantId -MailCertificateThumbprint $mailThumb `
     -WarnThreshold 1 -DisableThreshold 1 -DeleteThreshold 180 `
     -EnableDeletion `
@@ -321,8 +326,8 @@ Already-disabled accounts skip the disable call and go straight to removal.
 ### Mode 4 — Warning-only pass (notification, no action)
 
 ```powershell
-$result = Invoke-AccountInactivityRemediationWithImport `
-    -Accounts $accounts `
+$result = Invoke-InactiveAccountRemediation `
+    -Accounts $accounts -Prefixes @('admin', 'priv') `
     -MailSender 'iam-automation@corp.local' -MailClientId $mailAppId -MailTenantId $tenantId -MailCertificateThumbprint $mailThumb `
     -WarnThreshold 90 -DisableThreshold 99999 -DeleteThreshold 99999 `
     -ClientId $graphAppId -TenantId $tenantId -CertificateThumbprint $graphThumb
@@ -331,8 +336,8 @@ $result = Invoke-AccountInactivityRemediationWithImport `
 ### Mode 5 — Preview with -WhatIf
 
 ```powershell
-$result = Invoke-AccountInactivityRemediationWithImport `
-    -Accounts $accounts `
+$result = Invoke-InactiveAccountRemediation `
+    -Accounts $accounts -Prefixes @('admin', 'priv') `
     -MailSender 'iam-automation@corp.local' -MailClientId $mailAppId -MailTenantId $tenantId -MailCertificateThumbprint $mailThumb `
     -EnableDeletion -UseExistingGraphSession -WhatIf
 
@@ -343,22 +348,22 @@ $result.Results | Format-Table UPN, InactiveDays, ActionTaken, NotificationStage
 ### Mode 6 — Retry unprocessed accounts
 
 ```powershell
-# Run 1
-$result = Invoke-AccountInactivityRemediationWithImport `
-    -Accounts $accounts `
+# Run 1 — discovery mode
+$result = Invoke-InactiveAccountRemediation `
+    -Prefixes @('admin', 'priv') -ADSearchBase 'OU=PrivilegedAccounts,DC=corp,DC=local' `
     -MailSender 'iam-automation@corp.local' -MailClientId $mailAppId -MailTenantId $tenantId -MailCertificateThumbprint $mailThumb `
     -ClientId $graphAppId -TenantId $tenantId -CertificateThumbprint $graphThumb -EnableDeletion
 
-# Run 2 — retry only what was not resolved
+# Run 2 — import mode retry for accounts where something downstream failed
 if ($result.Unprocessed) {
-    $result2 = Invoke-AccountInactivityRemediationWithImport `
-        -Accounts $result.Unprocessed `
+    $result2 = Invoke-InactiveAccountRemediation `
+        -Accounts $result.Unprocessed -Prefixes @('admin', 'priv') `
         -MailSender 'iam-automation@corp.local' -MailClientId $mailAppId -MailTenantId $tenantId -MailCertificateThumbprint $mailThumb `
         -ClientId $graphAppId -TenantId $tenantId -CertificateThumbprint $graphThumb -EnableDeletion
 }
 ```
 
-The same pattern works when `Unprocessed` comes from the discovery sweep — both functions produce `Unprocessed` in the same import-contract shape.
+`Unprocessed` from a discovery run is already in import-contract shape, so cross-mode retry works directly.
 
 ---
 
@@ -366,9 +371,9 @@ The same pattern works when `Unprocessed` comes from the discovery sweep — bot
 
 ### `Send-GraphMail` — not implemented in this module
 
-The orchestrators call `Send-GraphMail` but it is not part of this module. The test suites mock it. Before running in production you must supply an implementation (e.g. from a shared utilities module).
+The orchestrator calls `Send-GraphMail` but it is not part of this module. The test suite mocks it. Before running in production you must supply an implementation (e.g. from a shared utilities module).
 
-The orchestrators call it with this signature:
+The orchestrator calls it with this signature:
 
 ```powershell
 Send-GraphMail `
@@ -400,14 +405,9 @@ Replace this with your organisation's AD offboarding process.
 ## Running tests
 
 ```powershell
-# Import-driven sweep (230 assertions)
-. .\IdentityLifecycle\tests\Invoke-AccountInactivityRemediationWithImport\Invoke-Test.ps1
+# Merged test suite (import + discovery modes)
+. .\IdentityLifecycle\tests\Invoke-InactiveAccountRemediation\Invoke-Test.ps1
 
-# Discovery sweep (227 assertions)
-. .\IdentityLifecycle\tests\Invoke-AccountInactivityRemediation\Invoke-Test.ps1
-
-# Both suites
+# Or via the runner script
 . .\run-tests.ps1
 ```
-
-See [tests/Invoke-AccountInactivityRemediationWithImport/README.md](IdentityLifecycle/tests/Invoke-AccountInactivityRemediationWithImport/README.md) and [tests/Invoke-AccountInactivityRemediation/README.md](IdentityLifecycle/tests/Invoke-AccountInactivityRemediation/README.md) for full scenario coverage.

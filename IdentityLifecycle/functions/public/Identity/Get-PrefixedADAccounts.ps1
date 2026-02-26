@@ -23,8 +23,8 @@
         Distinguished name of the OU to scope the search.
 
     .OUTPUTS
-        [pscustomobject] with fields: SamAccountName, UPN, ObjectId, Enabled, LastLogonAD, Created,
-        ExtensionAttribute14, Description.
+        [pscustomobject] with fields: SamAccountName, UserPrincipalName, ObjectId, Enabled,
+        LastLogonDate, Created, ExtensionAttribute14, Description.
 
     .EXAMPLE
         $adAccounts = Get-PrefixedADAccounts -Prefixes @('admin','priv') `
@@ -56,10 +56,10 @@
     foreach ($user in $adUsers) {
         [pscustomobject]@{
             SamAccountName       = $user.SamAccountName
-            UPN                  = $user.UserPrincipalName
+            UserPrincipalName    = $user.UserPrincipalName
             ObjectId             = $user.ObjectGUID.ToString()
             Enabled              = $user.Enabled
-            LastLogonAD          = $user.LastLogonDate
+            LastLogonDate        = $user.LastLogonDate
             Created              = $user.whenCreated
             ExtensionAttribute14 = $user.extensionAttribute14
             Description          = $user.Description

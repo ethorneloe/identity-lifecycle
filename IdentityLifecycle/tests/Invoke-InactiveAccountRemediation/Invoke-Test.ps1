@@ -1,26 +1,29 @@
 <#
 .SYNOPSIS
-    Test harness for Invoke-AccountInactivityRemediation.
+    Test harness for Invoke-InactiveAccountRemediation (merged orchestrator).
 
 .DESCRIPTION
-    Runs all scenarios defined in the scenarios/ subdirectory against the real Remediation
+    Runs all scenarios defined in the scenarios/ subdirectory against the real merged
     orchestrator, with AD/Entra discovery and action dependencies replaced by in-memory
     mocks injected into the module's script scope.
 
     Architecture:
         - Module is loaded with Import-Module -Global so all exported commands are
           available, and mocks are injected via & (Get-Module IdentityLifecycle) { }.
-        - Get-PrefixedADAccounts and Get-PrefixedEntraAccounts are mocked to return
-          lists controlled by the scenario (ADAccountList, EntraAccountList keys).
-        - Get-ADUser is mocked for owner resolution (Get-ADAccountOwner calls it internally).
-        - Send-GraphMail, Disable-InactiveAccount, and Remove-InactiveAccount are mocked.
-        - Connect-MgGraph and Disconnect-MgGraph are mocked.
+        - Two runner helpers are exposed:
+            Invoke-ImportOnce    -- calls Invoke-InactiveAccountRemediation -Accounts
+            Invoke-DiscoveryOnce -- calls Invoke-InactiveAccountRemediation -Prefixes/-ADSearchBase
+        - Both helpers pass SkipModuleImport and UseExistingGraphSession so tests run
+          without real AD/Graph infrastructure.
+        - All mocked functions write to a single $script:MockContext hashtable shared
+          by reference across both helpers and all scenarios.
         - Get-ADAccountOwner and New-InactiveAccountLifecycleMessage run for real.
+          Get-ADAccountOwner exercises the mocked Get-ADUser.
         - No file I/O; all results are in the returned output object.
 
 .EXAMPLE
     From the repo root:
-    . .\IdentityLifecycle\tests\Invoke-AccountInactivityRemediation\Invoke-Test.ps1
+    . .\IdentityLifecycle\tests\Invoke-InactiveAccountRemediation\Invoke-Test.ps1
 #>
 
 Set-StrictMode -Off
@@ -44,11 +47,13 @@ if (-not (Test-Path $ReportsDir)) {
 $script:AssertionResults = [System.Collections.Generic.List[pscustomobject]]::new()
 $script:CurrentScenario  = ''
 $script:CurrentRun       = 1
+$script:CurrentWhy       = ''
 
 $script:MockContext = @{
     ADAccountList        = @()
     EntraAccountList     = @()
     ADUsers              = @{}
+    MgUsers              = @{}
     MgUserSponsors       = @{}
     Actions              = [System.Collections.Generic.List[pscustomobject]]::new()
     NotifyFail           = @()
@@ -80,39 +85,75 @@ Set-Mocks -MockContext $script:MockContext
 # RUNNER HELPERS
 # ---------------------------------------------------------------------------
 
-function Invoke-RemediationOnce {
+function Invoke-ImportOnce {
     param(
-        [bool]   $EnableDeletion          = $false,
-        [int]    $WarnThreshold           = 90,
-        [int]    $DisableThreshold        = 120,
-        [int]    $DeleteThreshold         = 180,
-        [bool]   $UseExistingGraphSession = $true,
-        [bool]   $WhatIf                  = $false,
-        [string] $NotificationRecipientOverride = ''
+        [object[]] $Accounts,
+        [bool]     $EnableDeletion                = $false,
+        [int]      $WarnThreshold                 = 90,
+        [int]      $DisableThreshold              = 120,
+        [int]      $DeleteThreshold               = 180,
+        [bool]     $UseExistingGraphSession       = $true,
+        [bool]     $WhatIf                        = $false,
+        [string]   $NotificationRecipientOverride = ''
     )
 
     $params = @{
-        Prefixes         = @('admin', 'priv')
-        ADSearchBase     = 'OU=PrivilegedAccounts,DC=corp,DC=gov,DC=au'
+        Accounts                  = $Accounts
+        Prefixes                  = @('admin', 'priv', 'cloud')
         MailSender                = 'iam-automation@corp.local'
         MailClientId              = 'mock-mail-client-id'
         MailTenantId              = 'mock-mail-tenant-id'
         MailCertificateThumbprint = 'mock-mail-cert-thumbprint'
         WarnThreshold             = $WarnThreshold
-        DisableThreshold = $DisableThreshold
-        DeleteThreshold  = $DeleteThreshold
-        SkipModuleImport = $true
-        Confirm          = $false
-        WarningAction    = 'SilentlyContinue'
-        Verbose          = $false
-        WhatIf           = $WhatIf
+        DisableThreshold          = $DisableThreshold
+        DeleteThreshold           = $DeleteThreshold
+        SkipModuleImport          = $true
+        Confirm                   = $false
+        WarningAction             = 'SilentlyContinue'
+        Verbose                   = $false
+        WhatIf                    = $WhatIf
     }
 
     if ($UseExistingGraphSession)        { $params['UseExistingGraphSession']        = $true }
     if ($EnableDeletion)                 { $params['EnableDeletion']                 = $true }
     if ($NotificationRecipientOverride)  { $params['NotificationRecipientOverride']  = $NotificationRecipientOverride }
 
-    Invoke-AccountInactivityRemediation @params
+    Invoke-InactiveAccountRemediation @params
+}
+
+function Invoke-DiscoveryOnce {
+    param(
+        [bool]   $EnableDeletion                = $false,
+        [int]    $WarnThreshold                 = 90,
+        [int]    $DisableThreshold              = 120,
+        [int]    $DeleteThreshold               = 180,
+        [bool]   $UseExistingGraphSession       = $true,
+        [bool]   $WhatIf                        = $false,
+        [string] $NotificationRecipientOverride = ''
+    )
+
+    $params = @{
+        Prefixes                  = @('admin', 'priv')
+        ADSearchBase              = 'OU=PrivilegedAccounts,DC=corp,DC=gov,DC=au'
+        MailSender                = 'iam-automation@corp.local'
+        MailClientId              = 'mock-mail-client-id'
+        MailTenantId              = 'mock-mail-tenant-id'
+        MailCertificateThumbprint = 'mock-mail-cert-thumbprint'
+        WarnThreshold             = $WarnThreshold
+        DisableThreshold          = $DisableThreshold
+        DeleteThreshold           = $DeleteThreshold
+        SkipModuleImport          = $true
+        Confirm                   = $false
+        WarningAction             = 'SilentlyContinue'
+        Verbose                   = $false
+        WhatIf                    = $WhatIf
+    }
+
+    if ($UseExistingGraphSession)        { $params['UseExistingGraphSession']        = $true }
+    if ($EnableDeletion)                 { $params['EnableDeletion']                 = $true }
+    if ($NotificationRecipientOverride)  { $params['NotificationRecipientOverride']  = $NotificationRecipientOverride }
+
+    Invoke-InactiveAccountRemediation @params
 }
 
 function Set-ScenarioContext {
@@ -122,6 +163,7 @@ function Set-ScenarioContext {
     $script:MockContext.ADAccountList     = @(if ($Scenario.ContainsKey('ADAccountList'))    { $Scenario.ADAccountList }    else { @() })
     $script:MockContext.EntraAccountList  = @(if ($Scenario.ContainsKey('EntraAccountList')) { $Scenario.EntraAccountList } else { @() })
     $script:MockContext.ADUsers           = if ($Scenario.ContainsKey('ADUsers'))            { $Scenario.ADUsers }          else { @{} }
+    $script:MockContext.MgUsers           = if ($Scenario.ContainsKey('MgUsers'))            { $Scenario.MgUsers }          else { @{} }
     $script:MockContext.MgUserSponsors    = if ($Scenario.ContainsKey('MgUserSponsors'))     { $Scenario.MgUserSponsors }   else { @{} }
     $script:MockContext.NotifyFail        = @(if ($Scenario.ContainsKey('NotifyFail'))       { $Scenario.NotifyFail }       else { @() })
     $script:MockContext.DisableFail       = @(if ($Scenario.ContainsKey('DisableFail'))      { $Scenario.DisableFail }      else { @() })
@@ -135,20 +177,28 @@ function Invoke-Scenario {
 
     $script:CurrentScenario = $Scenario.Name
     $script:CurrentRun      = 1
+    $script:CurrentWhy      = if ($Scenario.ContainsKey('Why')) { $Scenario.Why } else { '' }
 
     Set-ScenarioContext $Scenario
 
     $invokeParams = @{}
 
+    if ($Scenario.ContainsKey('Accounts'))                       { $invokeParams['Accounts']                       = $Scenario.Accounts }
     if ($Scenario.ContainsKey('EnableDeletion'))                 { $invokeParams['EnableDeletion']                 = $Scenario.EnableDeletion }
-    if ($Scenario.ContainsKey('WarnThreshold'))                 { $invokeParams['WarnThreshold']                 = $Scenario.WarnThreshold }
-    if ($Scenario.ContainsKey('DisableThreshold'))              { $invokeParams['DisableThreshold']              = $Scenario.DisableThreshold }
-    if ($Scenario.ContainsKey('DeleteThreshold'))               { $invokeParams['DeleteThreshold']               = $Scenario.DeleteThreshold }
-    if ($Scenario.ContainsKey('UseExistingGraphSession'))       { $invokeParams['UseExistingGraphSession']       = $Scenario.UseExistingGraphSession }
-    if ($Scenario.ContainsKey('WhatIf'))                        { $invokeParams['WhatIf']                        = $Scenario.WhatIf }
-    if ($Scenario.ContainsKey('NotificationRecipientOverride')) { $invokeParams['NotificationRecipientOverride'] = $Scenario.NotificationRecipientOverride }
+    if ($Scenario.ContainsKey('WarnThreshold'))                  { $invokeParams['WarnThreshold']                  = $Scenario.WarnThreshold }
+    if ($Scenario.ContainsKey('DisableThreshold'))               { $invokeParams['DisableThreshold']               = $Scenario.DisableThreshold }
+    if ($Scenario.ContainsKey('DeleteThreshold'))                { $invokeParams['DeleteThreshold']                = $Scenario.DeleteThreshold }
+    if ($Scenario.ContainsKey('UseExistingGraphSession'))        { $invokeParams['UseExistingGraphSession']        = $Scenario.UseExistingGraphSession }
+    if ($Scenario.ContainsKey('WhatIf'))                        { $invokeParams['WhatIf']                         = $Scenario.WhatIf }
+    if ($Scenario.ContainsKey('NotificationRecipientOverride')) { $invokeParams['NotificationRecipientOverride']  = $Scenario.NotificationRecipientOverride }
 
-    $result = Invoke-RemediationOnce @invokeParams
+    # Import mode when Accounts supplied; discovery mode otherwise
+    if ($Scenario.ContainsKey('Accounts')) {
+        $result = Invoke-ImportOnce @invokeParams
+    } else {
+        $result = Invoke-DiscoveryOnce @invokeParams
+    }
+
     if ($Scenario.ContainsKey('AssertAfterRun')) {
         & $Scenario.AssertAfterRun $result $script:MockContext
     }
@@ -161,8 +211,8 @@ function Invoke-Scenario {
 $scenarioFiles = @(Get-ChildItem -Path (Join-Path $TestRoot 'scenarios') -Filter '*.scenarios.ps1' | Sort-Object Name)
 
 Write-Host ''
-Write-Host 'Invoke-AccountInactivityRemediation - Test Harness' -ForegroundColor White
-Write-Host '===================================================' -ForegroundColor White
+Write-Host 'Invoke-InactiveAccountRemediation - Test Harness' -ForegroundColor White
+Write-Host '=================================================' -ForegroundColor White
 Write-Host "Scenario files found: $($scenarioFiles.Count)" -ForegroundColor Cyan
 Write-Host ''
 
@@ -208,7 +258,7 @@ $totalFail = @($script:AssertionResults | Where-Object { -not $_.Pass }).Count
 $totalAll  = $script:AssertionResults.Count
 
 Write-Host ''
-Write-Host '===============================================' -ForegroundColor White
+Write-Host '=================================================' -ForegroundColor White
 Write-Host "Results: $totalAll assertions  |  $totalPass PASS  |  $totalFail FAIL" -ForegroundColor White
 
 if ($totalFail -gt 0) {
@@ -242,7 +292,7 @@ $lines.Add('<!DOCTYPE html>')
 $lines.Add('<html lang="en">')
 $lines.Add('<head>')
 $lines.Add('<meta charset="UTF-8">')
-$lines.Add('<title>Invoke-AccountInactivityRemediation - Test Report</title>')
+$lines.Add('<title>Invoke-InactiveAccountRemediation - Test Report</title>')
 $lines.Add('<style>')
 $lines.Add('  body  { font-family: Segoe UI, Arial, sans-serif; font-size: 13px; margin: 24px; color: #333; background: #fafafa; }')
 $lines.Add('  h1    { font-size: 20px; margin-bottom: 4px; }')
@@ -256,13 +306,15 @@ $lines.Add('  th    { background: #3a3a3a; color: #fff; padding: 9px 12px; text-
 $lines.Add('  td    { padding: 7px 12px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 12px; }')
 $lines.Add('  tr.pass td { background-color: #f0fff0; }')
 $lines.Add('  tr.fail td { background-color: #fff0f0; }')
+$lines.Add('  tr.scenario-start td { border-top: 2px solid #bbb; }')
 $lines.Add('  .badge-pass { color: #3c763d; font-weight: bold; }')
 $lines.Add('  .badge-fail { color: #a94442; font-weight: bold; }')
 $lines.Add('  .detail     { color: #888; font-style: italic; }')
+$lines.Add('  .why-cell   { color: #555; font-style: italic; background: #f8f8f8; border-left: 3px solid #ccc; vertical-align: top; }')
 $lines.Add('</style>')
 $lines.Add('</head>')
 $lines.Add('<body>')
-$lines.Add('<h1>Invoke-AccountInactivityRemediation - Test Report</h1>')
+$lines.Add('<h1>Invoke-InactiveAccountRemediation - Test Report</h1>')
 $lines.Add('<div class="meta">Generated: ' + $genDateStr + ' UTC | Duration: ' + $durationSec + 's</div>')
 $lines.Add('<div class="summary">')
 $lines.Add('  <span>Total: <strong>' + $totalAll + '</strong></span>')
@@ -271,17 +323,33 @@ $lines.Add('  <span class="fail-count">Fail: ' + $totalFail + '</span>')
 $lines.Add('</div>')
 $lines.Add('<table>')
 $lines.Add('<thead><tr>')
-$lines.Add('  <th>Scenario</th><th>Run</th><th>Assertion</th><th>Expected</th><th>Actual</th><th>Result</th>')
+$lines.Add('  <th>Scenario</th><th>Why this test matters</th><th>Run</th><th>Assertion</th><th>Expected</th><th>Actual</th><th>Result</th>')
 $lines.Add('</tr></thead>')
 $lines.Add('<tbody>')
+
+# Pre-compute rowspan counts per scenario so Why can be emitted once with rowspan.
+$scenarioSpans = @{}
+foreach ($r in $script:AssertionResults) {
+    if (-not $scenarioSpans.ContainsKey($r.Scenario)) { $scenarioSpans[$r.Scenario] = 0 }
+    $scenarioSpans[$r.Scenario]++
+}
+$scenarioSeen = @{}
 
 foreach ($r in $script:AssertionResults) {
     $rowClass   = if ($r.Pass) { 'pass' } else { 'fail' }
     $badgeClass = if ($r.Pass) { 'badge-pass' } else { 'badge-fail' }
     $badgeText  = if ($r.Pass) { 'PASS' } else { 'FAIL' }
     $detailHtml = if ($r.Detail) { '<br><span class="detail">' + (ConvertTo-HtmlSafe $r.Detail) + '</span>' } else { '' }
-    $lines.Add('<tr class="' + $rowClass + '">')
-    $lines.Add('  <td>' + (ConvertTo-HtmlSafe $r.Scenario) + '</td>')
+    $isFirst = -not $scenarioSeen.ContainsKey($r.Scenario)
+    $trClass = if ($isFirst) { $rowClass + ' scenario-start' } else { $rowClass }
+    $lines.Add('<tr class="' + $trClass + '">')
+    if ($isFirst) {
+        $span = $scenarioSpans[$r.Scenario]
+        $whyHtml = if ($r.Why) { (ConvertTo-HtmlSafe $r.Why) } else { '' }
+        $lines.Add('  <td rowspan="' + $span + '">' + (ConvertTo-HtmlSafe $r.Scenario) + '</td>')
+        $lines.Add('  <td rowspan="' + $span + '" class="why-cell">' + $whyHtml + '</td>')
+        $scenarioSeen[$r.Scenario] = $true
+    }
     $lines.Add('  <td>' + $r.Run + '</td>')
     $lines.Add('  <td>' + (ConvertTo-HtmlSafe $r.Assertion) + $detailHtml + '</td>')
     $lines.Add('  <td>' + (ConvertTo-HtmlSafe "$($r.Expected)") + '</td>')
